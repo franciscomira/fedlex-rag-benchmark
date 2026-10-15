@@ -98,7 +98,7 @@ Files: `benchmark/v1/dev.jsonl`, `benchmark/v1/test.jsonl`. Keys sorted, UTF-8, 
 | `gold_article_ids` | list of str | `"<SR>:<article>"`, empty for traps; copied by code |
 | `gold_facts` | list of `{text, article_id}` | 1 to 3 atomic facts in English (up to 4 for `cross_ref`); `article_id` says which gold article supports it; empty for traps |
 | `source_act` | str or null | SR of the primary gold article; null for traps |
-| `difficulty` | `easy`, `medium`, `hard` | drafter label, confirmed by the critic: easy = one sentence of the article states the answer, medium = needs a condition or several paragraphs, hard = needs an exception, a cross-reference or a numeric rule |
+| `difficulty` | `easy`, `medium`, `hard` | drafter label, confirmed by the critic: easy = one sentence of the article states the answer, medium = needs a condition, a number or several paragraphs, hard = needs an exception, a cross-reference, or a calculation or comparison (a number that is only read off the text is not hard). Pilot finding: the first rubric called every numeric rule hard (5 of 8 pilot items), so it was tightened |
 | `lexical_overlap` | int | see section 6 |
 | `bm25_rank` | `{de, fr, it}` ints | rank of the best gold article in each language index |
 | `trap_type` | str or null | traps only, see section 7 |
@@ -134,7 +134,9 @@ For `cross_ref` slots the articles are labelled A (primary) and B. For traps: `q
 
 - BM25 (k1 = 1.5, b = 0.75), own implementation in the package. Tokens: lowercase, `\w+` with at least 2 characters, no stemming, no stop words. Index: every retrieval-eligible article of one language, one document per article, title included.
 - `bm25_rank[lang]` = 1-based rank of the best-ranked gold article of the item in the `lang` index, for the question text as it is.
-- `lexical_overlap` = `bm25_rank` of the item's own query language (DE, FR, IT), and the minimum over the three indexes for EN. A low value means the question reuses the article's words. Reported in bands: 1 to 3, 4 to 20, above 20.
+- A gold article that scores 0 (no shared token with the question) has no rank: `bm25_rank[lang]` is null for it. The pilot showed that a rank assigned to zero-score articles only reflects article order in the corpus and carries no information.
+- `lexical_overlap` = `bm25_rank` of the item's own query language (DE, FR, IT); null when that rank is null. For EN it is null (not applicable): English function words such as "on", "or" and "in" are also tokens in the FR, DE and IT indexes, which gave the pilot EN items mid ranks by accident. The three ranks are still stored for EN items. A low value means the question reuses the article's words. Reported in bands: 1 to 3, 4 to 20, above 20, no signal (null).
+- Because there is no stemming and no stop-word list, function words decide the order among weak matches, so ranks in the hundreds or thousands mean "no lexical signal", not a defect.
 - Cross-lingual items will often rank poorly in the other languages' indexes. That is the cross-lingual effect, not a defect, and it is why all three ranks are stored.
 
 The critic sees the ranks and flags questions that copy distinctive terms of the article. No item is dropped automatically for a low rank number; the distribution is reported, and the dev BM25 recall@10 check in step 5 of the kickoff guards the overall difficulty.
@@ -156,7 +158,7 @@ A trap must be one a retrieval system could wrongly "answer" with a plausible ar
 - **Answer correctness:** for each gold fact an LLM judge returns supported or not supported by the system answer. Score is fact recall. The judge model and prompt are pinned in the repo, run at temperature 0, and checked against 30 facts I label by hand; the agreement rate is reported with the results.
 - **Citations:** ids cited by the system are copied by code from the retrieved context, never generated. Precision and recall against `gold_article_ids` are computed by code.
 - **Faithfulness:** the judge checks each claim of the answer against the text of the article the system cited.
-- **Traps:** correct if the system says the sources do not answer it and cites nothing; any citation on a trap counts as a failure.
+- **Traps:** correct if the system says the sources do not answer it and does not present an article as answering it. Open point from the pilot: a good refusal may cite a pointer article (for example 281.1:16, which says the Federal Council sets the fee tariff), and a strict "any citation fails" rule would punish it. The critic records the closest article for each trap in `critic_notes`; the exact rule is decided in Phase 2 before any test number is produced.
 
 No scorer is written in Phase 1.
 
@@ -172,7 +174,8 @@ Exit code is non-zero on any error. Checks: schema and types; `is_trap` consiste
 
 - Drafters and critics are Claude Code subagents (`question-writer`, `question-critic`, role files in `.claude/agents/`, model set to the `opus` alias). No API key is used and no `.env` is read. The model alias resolves at run time and the harness does not pin or report a dated model id. So reproducibility of drafting is limited to: the agent file hash, the plan hash, the brief hash and the date, all stored in `provenance`. The drafted text cannot be regenerated bit for bit. What is reproducible by one command is everything downstream of the draft files: assemble, ranks, split, validate, freeze, checksums.
 - Every draft and critic file is committed, so the path from slot to final text is auditable.
-- The writer role file will be updated before the pilot: it says the writer records lexical overlap, which is now computed by code, and it says ids are copied by hand, which is replaced by slot labels.
+- The writer role file was rewritten before the pilot (slot labels instead of typed ids, no lexical overlap by the model).
+- Pilot finding: the brief showed only the article title, so the writer could not tell which company form or chapter an article belongs to and wrote a GmbH question for a cooperative article. Briefs now carry the act name and the structural position (division, title, chapter) taken from the raw XML headings.
 
 ## 12. Versioning and freeze
 
