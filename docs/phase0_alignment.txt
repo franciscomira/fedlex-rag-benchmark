@@ -1,72 +1,112 @@
 PHASE 0 ALIGNMENT REPORT (DE/FR/IT)
 ========================================================================
 Source: Fedlex SPARQL endpoint + filestore, Akoma Ntoso XML; one chunk per <article>.
+
+PROVENANCE
+------------------------------------------------------------------------
 SR 210: consolidation 2026-07-01 (applicable 2026-07-01 .. open; as_of 2026-10-15)  https://fedlex.data.admin.ch/eli/cc/24/233_245_233/20260701
+    de: sha256 d0fe55605574de9403685c13836afb0db4212a4b88deb458cf2fe798c45bb694  1564357 bytes
+    fr: sha256 ccd18b17071d37d75bcb84c861c2c0cae8c4c0904495ba0ec7a3883710461d84  1624637 bytes
+    it: sha256 f34656b5e39d85d0cfc96a7ccde4b4b8916122284c7ac9b60ef42bb555eabdc7  1543918 bytes
 SR 220: consolidation 2026-10-01 (applicable 2026-10-01 .. 2027-06-30; as_of 2026-10-15)  https://fedlex.data.admin.ch/eli/cc/27/317_321_377/20261001
+    de: sha256 b5aab27bc6d2e5a569e84b23b5396d3507ce6dc665270f1c48ffb86d1ec12d94  2232437 bytes
+    fr: sha256 5bef56ec97c7623bfa555dc45847e1888b79903808d009685aa77ee98cab0d0f  2318427 bytes
+    it: sha256 6ed78611cc9b6b7b8538b74d284910c7c34d9dc6488e740681c0a55c35e9bc2e  2210595 bytes
 SR 235.1: consolidation 2025-07-07 (applicable 2025-07-07 .. open; as_of 2026-10-15)  https://fedlex.data.admin.ch/eli/cc/2022/491/20250707
+    de: sha256 a99bce3dc59a5c3f25e69ed5e483380c0f1a9b57ec452fedb62e0e68b7baabef  162824 bytes
+    fr: sha256 50b609dddcdb8b2b248f498de8e3a5eabfbb9e6d06674daf8fc508ab7393aeb3  167777 bytes
+    it: sha256 40d05593c64b46813c4ae1289ccd51717b737fc68b173edafbd2bc824d5fa91f  157907 bytes
+articles.parquet: sha256 bc310d686ece0ffb94d6b620e5d32ca251a1e5c6ef3173d5160580d22dff20b4  (9132 rows)
 
 1. COUNTS PER ACT AND LANGUAGE
 ------------------------------------------------------------------------
-SR      lang    chunks    body  transit.  repealed  in force
-210     de        1277    1099       178        39      1238
-210     fr        1277    1099       178        39      1238
-210     it        1277    1099       178        39      1238
-220     de        1685    1602        83        91      1594
-220     fr        1685    1602        83        91      1594
-220     it        1685    1602        83        87      1598
-235.1   de          77      77         0         0        77
-235.1   fr          77      77         0         0        77
-235.1   it          77      77         0         0        77
-(body = main-text articles; transit. = Schluss-/Übergangsbestimmungen articles;
- repealed = no text in force: aufgehoben/abrogé/abrogato, gegenstandslos, or '…')
+SR      lang    chunks    body  transit.  repealed historic.  in force
+210     de        1277    1099       178        40        74      1163
+210     fr        1277    1099       178        40        74      1163
+210     it        1277    1099       178        40        74      1163
+220     de        1690    1602        88        91         0      1599
+220     fr        1690    1602        88        91         0      1599
+220     it        1690    1602        88        91         0      1599
+235.1   de          77      77         0         0         0        77
+235.1   fr          77      77         0         0         0        77
+235.1   it          77      77         0         0         0        77
+body = main-text articles; transit. = Schluss-/Uebergangsbestimmungen chunks (articles of
+a disp_ block, plus blocks without articles chunked whole). repealed = no text in force
+(aufgehoben/abroge/abrogato, gegenstandslos, '...' elision, amendment-of-other-act stub).
+historic. = block quoting superseded wording (ZGB 'Wortlaut der frueheren Bestimmungen').
+in force = neither repealed nor historical.
 
-2. ALIGNMENT (article_id present in all 3 languages / union of ids)
+2. ID ALIGNMENT (article_id present in all 3 languages / union of ids)
 ------------------------------------------------------------------------
+What this shows: the three XML files expose the same article structure (same eIds, which
+Fedlex derives from the structure of the act). What it does NOT show: that the text behind
+an id is the same provision in each language. See the content-level checks in section 5.
+
 SR        aligned   union     rate
 210          1277    1277  100.00%
-220          1685    1685  100.00%
+220          1690    1690  100.00%
 235.1          77      77  100.00%
-ALL          3039    3039  100.00%
-Threshold 95%: PASS
-Same rate restricted to in-force (non-repealed) chunks: 2909/2913 = 99.86%
-Content sanity check: aligned in-force ids with DE/FR/IT text-length ratio > 2.5 (longest text > 200 chars): 0
+ALL          3044    3044  100.00%
+Threshold 95% on id alignment: PASS
+Same rate restricted to in-force chunks: 2839/2839 = 100.00%
 
 3. MISSING IDS PER LANGUAGE
 ------------------------------------------------------------------------
 None: every article_id exists in DE, FR and IT for every act.
 
-4. IDS ALIGNED BUT is_repealed DIFFERS BETWEEN LANGUAGES
+4. IDS ALIGNED BUT FLAGS DIFFER BETWEEN LANGUAGES
 ------------------------------------------------------------------------
-220:u12/2-4: de=repealed/elided, fr=repealed/elided, it=text
-220:u17/7: de=repealed/elided, fr=repealed/elided, it=text
-220:u2/1: de=repealed/elided, fr=repealed/elided, it=text
-220:u2/2: de=repealed/elided, fr=repealed/elided, it=text
+None: is_repealed and is_historical agree across DE/FR/IT for every aligned id.
 
-5. TRANSITIONAL / FINAL-PROVISION BLOCKS WITHOUT <article> (not chunked)
+5. CONTENT-LEVEL CHECKS (aligned ids only)
 ------------------------------------------------------------------------
-SR 220 de: disp_u1 | Übergangsbestimmungen des Bundesgesetzes vom 30. März 1911
-SR 220 de: disp_u4 | Übergangsbestimmung zur Änderung vom 17. Juni 2011
-SR 220 de: disp_u11 | Übergangsbestimmung zur Änderung vom 19. Juni 2020
-SR 220 de: disp_u15 | Übergangsbestimmungen zum XX. Titel
-SR 220 de: disp_u18 | Schlussbestimmungen zum zweiten Abschnitt des XXXIV. Titels
-SR 220 fr: disp_u1 | Dispositions transitoires de la loi fédérale du 30 mars 1911
-SR 220 fr: disp_u4 | Disposition transitoire de la modification du 17 juin 2011
-SR 220 fr: disp_u11 | Disposition transitoire de la modification du 19 juin 2020
-SR 220 fr: disp_u15 | Dispositions transitoires du titre vingtième
-SR 220 fr: disp_u18 | Dispositions finales du chapitre II du titre trente‑quatrième
-SR 220 it: disp_u1 | Disposizioni transitorie della legge federale del 30 marzo 1911
-SR 220 it: disp_u4 | Disposizione transitoria della modifica del 17 giugno 2011
-SR 220 it: disp_u11 | Disposizione transitoria della modifica del 19 giugno 2020
-SR 220 it: disp_u15 | Disposizioni transitorie del titolo XX
-SR 220 it: disp_u18 | Disposizioni finali del capo secondo del titolo XXXIV
+5a. eId-derived number vs number printed in <num> (per language)
+    mismatches: 1 of 9117 articles
+    SR 220 it: eId art_697_l_697_m -> id number '697l-697m', printed '697l'
 
-6. ARTICLES WITHOUT MARGINAL TITLE (per language; informational)
+5b. paragraph / item counts per article, DE vs FR vs IT
+    mismatching articles: 3 of 3044 aligned ids (format: <paragraphs>p/<items>i)
+    210:94: de=1p/0i  fr=1p/0i  it=2p/0i
+    220:644: de=2p/0i  fr=2p/0i  it=1p/0i
+    220:1033: de=2p/3i  fr=1p/3i  it=1p/3i
+
+5c. text-length ratio (longest/shortest of DE/FR/IT) > 1.6 (longest text > 200 chars), in-force chunks
+    flagged: 4 of 2839 aligned in-force ids
+    220:1075: ratio 1.85  de=300  fr=162  it=217
+    220:644: ratio 1.69  de=285  fr=245  it=169
+    210:336: ratio 1.67  de=227  fr=136  it=180
+    210:339: ratio 1.62  de=298  fr=184  it=250
+
+6. BLOCKS AND ANNEXES
+------------------------------------------------------------------------
+6a. transitional/final-provision blocks without <article>: chunked whole as '<SR>:u<N>'
+    SR 220 de: disp_u1 | Übergangsbestimmungen des Bundesgesetzes vom 30. März 1911 | chunked (348 chars)
+    SR 220 de: disp_u4 | Übergangsbestimmung zur Änderung vom 17. Juni 2011 | chunked (127 chars)
+    SR 220 de: disp_u11 | Übergangsbestimmung zur Änderung vom 19. Juni 2020 | chunked (192 chars)
+    SR 220 de: disp_u15 | Übergangsbestimmungen zum XX. Titel | chunked (1892 chars)
+    SR 220 de: disp_u18 | Schlussbestimmungen zum zweiten Abschnitt des XXXIV. Titels | chunked (1005 chars)
+    SR 220 fr: disp_u1 | Dispositions transitoires de la loi fédérale du 30 mars 1911 | chunked (323 chars)
+    SR 220 fr: disp_u4 | Disposition transitoire de la modification du 17 juin 2011 | chunked (154 chars)
+    SR 220 fr: disp_u11 | Disposition transitoire de la modification du 19 juin 2020 | chunked (192 chars)
+    SR 220 fr: disp_u15 | Dispositions transitoires du titre vingtième | chunked (1571 chars)
+    SR 220 fr: disp_u18 | Dispositions finales du chapitre II du titre trente‑quatrièm | chunked (1001 chars)
+    SR 220 it: disp_u1 | Disposizioni transitorie della legge federale del 30 marzo 1 | chunked (338 chars)
+    SR 220 it: disp_u4 | Disposizione transitoria della modifica del 17 giugno 2011 | chunked (159 chars)
+    SR 220 it: disp_u11 | Disposizione transitoria della modifica del 19 giugno 2020 | chunked (189 chars)
+    SR 220 it: disp_u15 | Disposizioni transitorie del titolo XX | chunked (1579 chars)
+    SR 220 it: disp_u18 | Disposizioni finali del capo secondo del titolo XXXIV | chunked (1046 chars)
+6b. annexes (<components>) are NOT chunked; text left out:
+    SR 235.1 de: annex #1: 268 chars, annex #2: 52 chars
+    SR 235.1 fr: annex #1: 274 chars, annex #2: 51 chars
+    SR 235.1 it: annex #1: 298 chars, annex #2: 59 chars
+
+7. ARTICLES WITHOUT MARGINAL TITLE (per language; informational)
 ------------------------------------------------------------------------
 SR 210: de=6, fr=6, it=6 (in-force chunks with empty title)
-SR 220: de=20, fr=20, it=21 (in-force chunks with empty title)
+SR 220: de=20, fr=20, it=20 (in-force chunks with empty title)
 SR 235.1: de=2, fr=2, it=2 (in-force chunks with empty title)
 
-7. FIVE RANDOM ALIGNED IN-FORCE ARTICLES (seed=42)
+8. FIVE RANDOM ALIGNED IN-FORCE ARTICLES (seed=42)
 ------------------------------------------------------------------------
 === 235.1:29 ===
 --- DE | title: Einschränkungen des Rechts auf Datenherausgabe oder -übertragung

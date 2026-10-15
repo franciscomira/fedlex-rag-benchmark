@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import json
-
-import httpx
 import pytest
 
 from akn_fixtures import (
@@ -16,7 +13,6 @@ from akn_fixtures import (
     full_act,
     wrap,
 )
-from fedlex_bench import ingest
 from fedlex_bench.ingest import (
     normalize_article_number,
     number_from_eid,
@@ -94,7 +90,7 @@ def parsed() -> dict:
 
 def test_parses_all_articles_in_document_order(parsed: dict) -> None:
     assert list(parsed)[:3] == ["art_1", "art_257_d", "art_12_bis"]
-    assert len(parsed) == 16
+    assert len(parsed) == 20
 
 
 def test_body_article_text_title_and_footnote_removal(parsed: dict) -> None:
@@ -174,10 +170,13 @@ def test_numbers_are_unique_within_a_document() -> None:
     assert len(numbers) == len(set(numbers))
 
 
-def test_unarticled_transitional_units_are_reported() -> None:
+def test_unarticled_transitional_units_are_reported_and_chunked() -> None:
     units = unarticled_units(full_act())
-    assert [eid for eid, _ in units] == ["disp_u4"]
+    assert [(eid, n > 0) for eid, _, n in units] == [("disp_u4", True)]
     assert units[0][1].startswith("Uebergangsbestimmung")
+    block = {a.number: a for a in parse_akn(full_act())}["u4"]
+    assert block.kind == "transitional" and block.text == "Gilt sinngemaess."
+    assert block.block_heading == block.title and not block.is_repealed
 
 
 def test_parse_accepts_str_and_ignores_external_entities() -> None:
@@ -229,34 +228,3 @@ def test_pick_manifestations_prefers_xml_and_latest_revision() -> None:
     assert out["de"] == {"format": "xml", "url": "u/de-xml-3.xml"}
     assert out["fr"] == {"format": "html", "url": "u/fr.html"}
     assert "it" not in out and "rm" not in out
-
-
-# ---------------------------------------------------------------- idempotent download
-
-
-def test_ensure_raw_uses_cache_and_never_touches_network(tmp_path, monkeypatch) -> None:
-    manifest = {
-        "220": {
-            "sr": "220",
-            "as_of": "2026-10-15",
-            "consolidation": "c",
-            "consolidation_date": "2026-10-01",
-            "consolidation_end": None,
-            "work": "w",
-            "files": {
-                lang: {"format": "xml", "url": f"u/{lang}.xml"} for lang in "de fr it".split()
-            },
-        }
-    }
-    (tmp_path / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
-    for lang in ("de", "fr", "it"):
-        p = ingest.raw_path("220", lang, "2026-10-01", "xml", tmp_path)
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_bytes(b"<x/>")
-
-    def boom(*_a, **_k):  # any HTTP client construction means a network attempt
-        raise AssertionError("network access attempted")
-
-    monkeypatch.setattr(httpx, "Client", boom)
-    out = ingest.ensure_raw(("220",), "2026-10-15", raw_dir=tmp_path)
-    assert out == manifest

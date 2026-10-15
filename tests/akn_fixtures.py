@@ -120,6 +120,37 @@ TRANSITIONAL_NO_ARTICLE = (
 )
 
 
+# Paragraph number followed by a list: paragraph > num, content > blockList > listIntroduction.
+# The "1" must stay on the same line as the introduction (it used to be left orphaned).
+ART_LIST = (
+    '<article eId="art_20"><num><b>Art. 20</b></num>'
+    '<paragraph eId="art_20/para_1"><num>1</num><content><blockList>'
+    '<listIntroduction eId="art_20/para_1/listintro">Der Kunde kann widerrufen, wenn:'
+    "</listIntroduction>"
+    '<item eId="art_20/para_1/lbl_a"><num>a. </num><p>am Arbeitsplatz;</p></item>'
+    '<item eId="art_20/para_1/lbl_b"><num>b. </num><p>am Telefon.</p></item>'
+    "</blockList></content></paragraph>"
+    '<paragraph eId="art_20/para_2"><num>2</num><content><p>Zweiter Absatz.</p></content>'
+    "</paragraph></article>"
+)
+
+# Block quoting superseded wording (ZGB "Wortlaut der fruheren Bestimmungen").
+HISTORICAL = (
+    '<proviso eId="disp_u5"><heading>Wortlaut der früheren Bestimmungen des sechsten Titels'
+    "</heading>"
+    '<article eId="disp_u5/art_178"><num><b>Art. 178</b></num>'
+    '<paragraph eId="disp_u5/art_178/para"><content><p>Altes Recht.</p></content></paragraph>'
+    "</article></proviso>"
+)
+# Amendment of another act: introduction ending in ":" followed by the elision mark.
+AMENDMENT = (
+    '<transitional eId="disp_u6"><heading>Änderung von Bundesgesetzen</heading>'
+    '<article eId="disp_u6/art_2"><num><b>Art. 2</b></num>'
+    '<paragraph eId="disp_u6/art_2/para"><content><p>Sono modificate:</p>'
+    "<p>…</p></content></paragraph></article></transitional>"
+)
+
+
 def full_act() -> bytes:
     return wrap(
         ART_1
@@ -138,4 +169,7 @@ def full_act() -> bytes:
         + TRANSITIONAL
         + TRANSITIONAL_2_4
         + TRANSITIONAL_NO_ARTICLE
+        + ART_LIST
+        + HISTORICAL
+        + AMENDMENT
     )
