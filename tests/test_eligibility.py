@@ -3,19 +3,24 @@ skipped when ``data/processed/articles.parquet`` is missing). No network access.
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 import pytest
 
 from fedlex_bench.chunk import ARTICLES_PARQUET
 from fedlex_bench.eligibility import (
     DEFAULT_MIN_CHARS,
+    TRANSITIONAL_IN_BODY,
     benchmark_eligible,
     benchmark_rows,
     eligibility_mismatches,
+    excluded_by_list,
     pool_rows,
     pool_size_table,
+    resolve_gold,
     retrieval_eligible,
 )
+from fedlex_bench.ids import resolve_id
 
 LANGS = ("de", "fr", "it")
 
@@ -207,6 +212,20 @@ def test_benchmark_eligible_validates_min_chars():
         benchmark_eligible(df, min_chars=1.5)
 
 
+def test_benchmark_eligible_accepts_numpy_integers_for_min_chars():
+    rows = [row("220:1", lang, text="x" * 250) for lang in LANGS]
+    df = frame(rows)
+    for value in (np.int64(200), np.int32(200), np.uint8(100)):
+        assert len(benchmark_eligible(df, min_chars=value)) == 1, value
+    assert len(benchmark_eligible(df, min_chars=np.int64(300))) == 0
+    with pytest.raises(ValueError):
+        benchmark_eligible(df, min_chars=np.bool_(True))
+    with pytest.raises(ValueError):
+        benchmark_eligible(df, min_chars=np.float64(200.0))
+    with pytest.raises(ValueError):
+        benchmark_eligible(df, min_chars=np.int64(-1))
+
+
 def test_benchmark_eligible_min_chars_zero_still_needs_text():
     rows = [row("220:1", lang, text="") for lang in LANGS]
     assert benchmark_eligible(frame(rows), min_chars=0).empty
@@ -253,6 +272,88 @@ def test_benchmark_eligible_empty_frame():
     ]
 
 
+# ------------------------------------------------------------------ transitional in the body
+
+
+def test_transitional_in_body_list_is_explicit_and_conservative():
+    assert isinstance(TRANSITIONAL_IN_BODY, frozenset)
+    assert "235.1:69" in TRANSITIONAL_IN_BODY
+    # ordinary articles whose title merely contains "Inkrafttreten" are not on it
+    assert "220:406e" not in TRANSITIONAL_IN_BODY
+    for aid in TRANSITIONAL_IN_BODY:
+        sr, _, number = aid.partition(":")
+        assert sr and number and not number.startswith("u"), aid  # main-body ids only
+
+
+def test_listed_transitional_articles_are_not_benchmark_eligible_but_stay_retrievable():
+    listed = "235.1:69"
+    df = frame(all_langs(listed) + all_langs("235.1:5"))
+    assert set(retrieval_eligible(df)["article_id"]) == {listed, "235.1:5"}
+    assert list(benchmark_eligible(df)["article_id"]) == ["235.1:5"]
+    assert excluded_by_list(df) == [listed]
+
+
+def test_exclusion_list_can_be_overridden_or_emptied():
+    df = frame(all_langs("235.1:69") + all_langs("220:1"))
+    assert list(benchmark_eligible(df, exclude_ids=())["article_id"]) == ["220:1", "235.1:69"]
+    only = benchmark_eligible(df, exclude_ids=frozenset({"220:1"}))
+    assert list(only["article_id"]) == ["235.1:69"]
+
+
+def test_excluded_by_list_only_reports_ids_that_would_otherwise_pass():
+    rows = all_langs("235.1:69", text="x" * 50)  # listed but too short anyway
+    rows += all_langs("235.1:70")  # listed and long enough
+    rows += all_langs("235.1:71", repealed=True)  # listed but not retrievable
+    rows += all_langs("220:1")
+    assert excluded_by_list(frame(rows)) == ["235.1:70"]
+
+
+def test_pool_size_table_applies_the_exclusion_list():
+    df = frame(all_langs("235.1:69") + all_langs("235.1:5"))
+    t = pool_size_table(df, thresholds=(100,))
+    assert t.loc["235.1"].tolist() == [2, 1]  # retrieval-eligible 2, pool 1
+
+
+# ------------------------------------------------------------------ resolve_gold
+
+
+def test_resolve_gold_returns_pool_ids_only():
+    pool = ["220:1", "220:257d"]
+    assert resolve_gold("220:1", pool) == "220:1"
+    assert resolve_gold("220:Art. 257 D", pool) == "220:257d"  # normalised
+    assert resolve_gold("220:2", pool) is None  # not in the pool
+    assert resolve_gold("garbage", pool) is None
+
+
+def test_resolve_gold_range_id_is_resolved_but_never_gold():
+    pool = ["210:134", "210:150"]
+    known = [*pool, "210:135-149"]
+    # 210:140 resolves to the repealed range chunk, which is not a benchmark article.
+    assert resolve_gold("210:140", pool, known) is None
+    assert resolve_gold("210:140", pool) is None  # ranges unknown: still None, never a guess
+    assert resolve_gold("210:134", pool, known) == "210:134"
+
+
+def test_resolve_gold_uses_pool_not_just_known():
+    pool = ["220:1"]
+    known = ["220:1", "220:2"]  # 220:2 exists but is not eligible
+    assert resolve_gold("220:2", pool, known) is None
+    # pool ids need not be repeated in known_ids
+    assert resolve_gold("220:1", pool, ["220:2"]) == "220:1"
+
+
+def test_resolve_gold_accepts_series_set_and_rejects_bare_strings_and_frames():
+    pool = pd.Series(["220:1", "220:3"])
+    assert resolve_gold("220:3", pool) == "220:3"
+    assert resolve_gold("220:3", {"220:3"}) == "220:3"
+    with pytest.raises(TypeError, match="not a single string"):
+        resolve_gold("220:3", "220:3")
+    with pytest.raises(TypeError, match="not a single string"):
+        resolve_gold("220:3", ["220:3"], "220:3")
+    with pytest.raises(TypeError, match="article_id"):
+        resolve_gold("220:3", pd.DataFrame({"article_id": ["220:3"]}))
+
+
 # ------------------------------------------------------------------ per-language rows
 
 
@@ -279,6 +380,18 @@ def test_pool_rows_single_language_uses_given_pool():
     out = pool_rows(df, pool, "fr")
     assert list(out["article_id"]) == ["220:1"]
     assert list(out["lang"]) == ["fr"]
+
+
+def test_pool_rows_raises_when_a_pool_id_has_no_eligible_row_in_the_language():
+    df = frame(all_langs("220:1") + [row("220:2", "de"), row("220:2", "fr")])  # 220:2 not in IT
+    pool = benchmark_eligible(frame(all_langs("220:1") + all_langs("220:2")))
+    assert list(pool["article_id"]) == ["220:1", "220:2"]
+    assert list(pool_rows(df, pool, "de")["article_id"]) == ["220:1", "220:2"]
+    with pytest.raises(ValueError, match="220:2"):
+        pool_rows(df, pool, "it")
+    ghost = pd.DataFrame({"article_id": ["220:1", "220:99"]})
+    with pytest.raises(ValueError, match="220:99"):
+        pool_rows(df, ghost, "de")
 
 
 def test_pool_rows_unknown_language_raises():
@@ -410,3 +523,131 @@ def test_corpus_pool_is_deterministic(corpus_df):
     pd.testing.assert_frame_equal(
         benchmark_eligible(corpus_df), benchmark_eligible(corpus_df.sample(frac=1, random_state=3))
     )
+
+
+# Pool sizes of the 2026-10-15 snapshot (docs/phase0_report.md, section 7). A change here means the
+# corpus, the eligibility rules or TRANSITIONAL_IN_BODY changed: update the report with it.
+EXPECTED_POOL_TABLE = {
+    "eligible_all_langs": {
+        "210": 1065,
+        "220": 1526,
+        "221.214.1": 46,
+        "221.229.1": 98,
+        "235.1": 77,
+        "241": 30,
+        "272": 427,
+        "281.1": 394,
+        "ALL": 3663,
+    },
+    "min_chars_100": {
+        "210": 1016,
+        "220": 1478,
+        "221.214.1": 42,
+        "221.229.1": 94,
+        "235.1": 68,
+        "241": 28,
+        "272": 378,
+        "281.1": 375,
+        "ALL": 3479,
+    },
+    "min_chars_200": {
+        "210": 822,
+        "220": 1243,
+        "221.214.1": 34,
+        "221.229.1": 85,
+        "235.1": 61,
+        "241": 20,
+        "272": 296,
+        "281.1": 304,
+        "ALL": 2865,
+    },
+    "min_chars_300": {
+        "210": 582,
+        "220": 960,
+        "221.214.1": 29,
+        "221.229.1": 74,
+        "235.1": 50,
+        "241": 15,
+        "272": 213,
+        "281.1": 232,
+        "ALL": 2155,
+    },
+}
+
+
+@corpus
+def test_corpus_full_pool_size_table_is_pinned(corpus_df):
+    table = pool_size_table(corpus_df, thresholds=(100, 200, 300))
+    assert table.to_dict() == EXPECTED_POOL_TABLE
+
+
+@corpus
+def test_corpus_pool_excludes_exactly_the_listed_transitional_articles(corpus_df):
+    assert excluded_by_list(corpus_df) == [
+        "221.229.1:103a",
+        "221.229.1:104",
+        "235.1:69",
+        "235.1:70",
+        "235.1:71",
+        "235.1:72",
+        "272:404",
+        "272:407",
+        "272:407b",
+        "272:407c",
+        "272:407f",
+        "281.1:351",
+    ]
+    pool_ids = set(benchmark_eligible(corpus_df)["article_id"])
+    assert not pool_ids & TRANSITIONAL_IN_BODY
+    # the list does not touch retrieval
+    retrieval_ids = set(retrieval_eligible(corpus_df)["article_id"])
+    assert {"235.1:69", "272:404", "281.1:351"} <= retrieval_ids
+    assert benchmark_eligible(corpus_df, exclude_ids=()).shape[0] == len(pool_ids) + 12
+
+
+@corpus
+def test_corpus_no_other_pool_article_is_titled_like_a_transitional_provision(corpus_df):
+    """Guard for the hand-reviewed list: an article whose title in any language starts like a
+    transitional/entry-into-force provision must be on the list or be a reviewed ordinary article
+    (220:406e is a contract rule that happens to be called "Inkrafttreten, Widerruf, ...")."""
+    reviewed_ordinary = {"220:406e"}
+    pattern = (
+        "^(?:Uebergangsbestimmung|\u00dcbergangsbestimmung|Inkrafttreten|Referendum"
+        "|Disposition transitoire|Dispositions transitoires|Entr\u00e9e en vigueu"
+        "|R\u00e9f\u00e9rendum|Disposizione transitoria|Disposizioni transitorie"
+        "|Entrata in vigore|Referendum ed entrata)"
+    )
+    pool_ids = set(benchmark_eligible(corpus_df)["article_id"])
+    hits = corpus_df[
+        corpus_df["article_id"].isin(pool_ids) & corpus_df["title"].str.contains(pattern)
+    ]
+    assert set(hits["article_id"]) <= reviewed_ordinary, sorted(set(hits["article_id"]))
+    # the guard is not vacuous: without the list the same pattern finds the listed articles
+    without_list = set(benchmark_eligible(corpus_df, exclude_ids=())["article_id"])
+    all_hits = corpus_df[
+        corpus_df["article_id"].isin(without_list) & corpus_df["title"].str.contains(pattern)
+    ]
+    assert {"235.1:69", "221.229.1:104", "281.1:351"} <= set(all_hits["article_id"])
+
+
+@corpus
+def test_corpus_resolve_gold_range_and_repealed_ids_are_never_gold(corpus_df):
+    pool_ids = set(benchmark_eligible(corpus_df)["article_id"])
+    known = set(corpus_df["article_id"])
+    # 210:140 resolves (to the repealed range chunk 210:135-149) but is not a benchmark article
+    assert resolve_gold("210:140", pool_ids, known) is None
+    assert resolve_id("210:140", known) == "210:135-149"
+    # a repealed single article: it exists as a chunk, has no text, and is not gold either
+    de = corpus_df[corpus_df["lang"] == "de"]
+    gone = de.loc[de["is_repealed"] & (de["kind"] == "article"), "article_id"]
+    repealed = sorted(a for a in gone if "-" not in a)
+    assert repealed
+    for aid in repealed[:25]:
+        assert resolve_id(aid, known) == aid
+        assert resolve_gold(aid, pool_ids, known) is None, aid
+    # an ordinary pool article is gold, also when cited in a non-canonical way
+    assert resolve_gold("220:Art. 257 d", pool_ids, known) == "220:257d"
+    assert resolve_gold("220:257d", pool_ids, known) == "220:257d"
+    # a listed transitional article exists and is retrievable, but is not gold
+    assert resolve_id("235.1:69", known) == "235.1:69"
+    assert resolve_gold("235.1:69", pool_ids, known) is None

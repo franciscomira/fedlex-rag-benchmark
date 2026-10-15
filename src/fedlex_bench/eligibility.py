@@ -7,10 +7,15 @@ Two levels, both deterministic (sorted output, no randomness):
   This is what goes into the retrieval index.
 - **Benchmark-eligible** (:func:`benchmark_eligible`): an article id that is retrieval-eligible in
   **all three languages** and whose text has at least ``min_chars`` characters in **every**
-  language. The result is an article-level pool (one row per ``article_id``) with the per-language
-  lengths; :func:`pool_rows` / :func:`benchmark_rows` return the chunk rows of the pool per
-  language. Because the pool is defined once on article ids, the DE, FR and IT pools are identical
-  by construction.
+  language, and which is not on the hand-reviewed list ``TRANSITIONAL_IN_BODY`` (transitional,
+  final and repeal/amendment provisions that sit in the main text of an act). The result is an
+  article-level pool (one row per ``article_id``) with the per-language lengths;
+  :func:`pool_rows` / :func:`benchmark_rows` return the chunk rows of the pool per language.
+  Because the pool is defined once on article ids, the DE, FR and IT pools are identical by
+  construction.
+- **Gold ids** (:func:`resolve_gold`): a cited id is first resolved (ranges, normalisation, see
+  :mod:`fedlex_bench.ids`) and only accepted when the result is in the pool. Resolving alone is not
+  enough: ``210:140`` resolves to a repealed range chunk, which can never be a gold article.
 
 About the 200-character default (``DEFAULT_MIN_CHARS``): it is a judgement call, not a measured
 optimum. Very short articles give a question too little text to be answerable from the article
@@ -25,17 +30,75 @@ from __future__ import annotations
 
 import argparse
 import logging
+import numbers
+from collections.abc import Collection, Iterable
 from pathlib import Path
 
 import pandas as pd
 
 from fedlex_bench.chunk import ARTICLES_PARQUET, natural_key, sort_articles
+from fedlex_bench.ids import resolve_id
 from fedlex_bench.ingest import LANGS
 
 log = logging.getLogger("fedlex_bench.eligibility")
 
 DEFAULT_MIN_CHARS = 200
 DEFAULT_THRESHOLDS: tuple[int, ...] = (100, 200, 300)
+
+# Transitional, final and repeal/amendment provisions that sit in the *main text* of an act (the
+# chunker only marks ``disp_`` blocks as transitional; here the act itself puts them under a
+# "Schlussbestimmungen" / "Dispositions finales" / "Disposizioni finali" part, chapter, section or
+# title, or under an "Uebergangsbestimmung" heading). They are law in force but no good anchor for
+# a question about the substantive rules, and several of them only make sense with the old law.
+# Hand-reviewed on the 2026-10-15 snapshot (DE, FR and IT headings agree): found by listing the
+# articles under such headings in the raw XML and reading each one. Deliberately NOT listed, though
+# under "Schlussbestimmungen": 221.229.1:100 and :101 (relation to the Code of Obligations, excluded
+# relationships), 272:400, :401 and :401a (implementing rules, pilot projects, statistics), and
+# 220:406e, whose title only contains the word "Inkrafttreten" (it is an ordinary contract rule).
+# Ids that fall below the length threshold anyway are listed too, so the list does not depend on
+# ``min_chars``. The ids belong to this snapshot (article numbers are stable within it).
+TRANSITIONAL_IN_BODY: frozenset[str] = frozenset(
+    {
+        # SR 221.214.1 Consumer Credit Act, section "Schlussbestimmungen"
+        "221.214.1:41",  # Aufhebung und Aenderung bisherigen Rechts
+        "221.214.1:42",  # Referendum und Inkrafttreten
+        # SR 221.229.1 Insurance Contract Act, chapter "Schlussbestimmungen"
+        "221.229.1:103",  # Aufhebung bestehender Vorschriften
+        "221.229.1:103a",  # Uebergangsbestimmung zur Aenderung vom 19. Juni 2020
+        "221.229.1:104",  # Inkrafttreten des Gesetzes
+        # SR 235.1 Data Protection Act, chapter "Schlussbestimmungen"
+        "235.1:68",  # Aufhebung und Aenderung anderer Erlasse
+        "235.1:69",  # Uebergangsbestimmungen betreffend laufende Bearbeitungen
+        "235.1:70",  # Uebergangsbestimmung betreffend laufende Verfahren
+        "235.1:71",  # Uebergangsbestimmung betreffend Daten juristischer Personen
+        "235.1:72",  # Uebergangsbestimmung betreffend die Wahl und die Beendigung der Amtsdauer
+        "235.1:72a",  # Uebergangsbestimmung betreffend das Arbeitsverhaeltnis
+        "235.1:73",  # Koordination
+        "235.1:74",  # Referendum und Inkrafttreten
+        # SR 241 Unfair Competition Act, chapter "Schlussbestimmungen"
+        "241:28",  # Aufhebung bisherigen Rechts
+        "241:29",  # Referendum und Inkrafttreten
+        # SR 272 Civil Procedure Code, part "Schlussbestimmungen"
+        "272:402",  # Aufhebung und Aenderung bisherigen Rechts
+        "272:403",  # Koordinationsbestimmungen
+        # SR 272, title "Uebergangsbestimmungen" (chapters of 2008 and of each later amendment)
+        "272:404",  # Weitergelten des bisherigen Rechts
+        "272:405",  # Rechtsmittel
+        "272:406",  # Gerichtsstandsvereinbarung
+        "272:407",  # Schiedsgerichtsbarkeit
+        "272:407a",  # Uebergangsbestimmung zur Aenderung vom 28. September 2012
+        "272:407b",  # ... vom 20. Maerz 2015
+        "272:407c",  # ... vom 19. Juni 2015
+        "272:407d",  # ... vom 14. Dezember 2018
+        "272:407e",  # ... vom 25. September 2020
+        "272:407f",  # ... vom 17. Maerz 2023
+        "272:408",  # Referendum und Inkrafttreten
+        # SR 281.1 Debt Enforcement and Bankruptcy Act, title "Schlussbestimmungen"
+        "281.1:351",  # Inkrafttreten
+        "281.1:352",  # Bekanntmachung
+    }
+)
+
 REQUIRED_COLUMNS = ("sr", "article_id", "lang", "text", "kind", "is_repealed", "is_historical")
 
 
@@ -46,7 +109,7 @@ def _require_columns(df: pd.DataFrame) -> None:
 
 
 def _check_min_chars(min_chars: int) -> None:
-    if isinstance(min_chars, bool) or not isinstance(min_chars, int) or min_chars < 0:
+    if isinstance(min_chars, bool) or not isinstance(min_chars, numbers.Integral) or min_chars < 0:
         raise ValueError(f"min_chars must be a non-negative integer, got {min_chars!r}")
 
 
@@ -107,10 +170,14 @@ def _lengths_wide(df: pd.DataFrame, langs: tuple[str, ...]) -> pd.DataFrame:
 
 
 def benchmark_eligible(
-    df: pd.DataFrame, min_chars: int = DEFAULT_MIN_CHARS, langs: tuple[str, ...] = LANGS
+    df: pd.DataFrame,
+    min_chars: int = DEFAULT_MIN_CHARS,
+    langs: tuple[str, ...] = LANGS,
+    exclude_ids: Collection[str] = TRANSITIONAL_IN_BODY,
 ) -> pd.DataFrame:
     """Article-level benchmark pool: ids retrieval-eligible in every language of ``langs`` with
-    ``len(text) >= min_chars`` in every one of them (inclusive).
+    ``len(text) >= min_chars`` in every one of them (inclusive), minus ``exclude_ids`` (by default
+    the hand-reviewed ``TRANSITIONAL_IN_BODY``; pass ``()`` to switch the list off).
 
     One row per ``article_id`` with columns ``article_id``, ``sr``, ``chars_<lang>`` per language
     and ``min_chars`` (the shortest of the per-language lengths). Sorted by act and natural
@@ -118,8 +185,9 @@ def benchmark_eligible(
     _check_min_chars(min_chars)
     _require_columns(df)
     langs = tuple(langs)
+    excluded = _id_set(exclude_ids, "exclude_ids")
     wide = _lengths_wide(df, langs).dropna()  # present and retrieval-eligible in every language
-    wide = wide[(wide >= min_chars).all(axis=1)].astype(int)
+    wide = wide[(wide >= int(min_chars)).all(axis=1) & ~wide.index.isin(excluded)].astype(int)
     pool = pd.DataFrame(
         {
             "article_id": wide.index.to_numpy(dtype=object),
@@ -135,21 +203,72 @@ def benchmark_eligible(
 
 def pool_rows(df: pd.DataFrame, pool: pd.DataFrame, lang: str) -> pd.DataFrame:
     """The chunk rows of one language for the articles of ``pool``, in deterministic order. All
-    original columns are kept."""
+    original columns are kept. Raises :class:`ValueError` when the returned ids are not exactly
+    the pool ids (a pool id with no retrieval-eligible row in ``lang``), instead of returning a
+    shorter frame."""
     if lang not in LANGS:
         raise ValueError(f"unknown language {lang!r}; expected one of {LANGS}")
     _require_columns(df)
+    wanted = set(pool["article_id"])
     sub = retrieval_eligible(df[df["lang"] == lang])
-    return sub[sub["article_id"].isin(set(pool["article_id"]))].reset_index(drop=True)
+    out = sub[sub["article_id"].isin(wanted)].reset_index(drop=True)
+    got = set(out["article_id"])
+    if got != wanted or len(out) != len(got):
+        missing = sorted(wanted - got, key=_natural_id_key)[:5]
+        raise ValueError(
+            f"pool ids and {lang} rows differ: {len(wanted - got)} pool id(s) without an "
+            f"eligible row (e.g. {missing}), {len(out) - len(got)} duplicate row(s)"
+        )
+    return out
 
 
 def benchmark_rows(
-    df: pd.DataFrame, min_chars: int = DEFAULT_MIN_CHARS, langs: tuple[str, ...] = LANGS
+    df: pd.DataFrame,
+    min_chars: int = DEFAULT_MIN_CHARS,
+    langs: tuple[str, ...] = LANGS,
+    exclude_ids: Collection[str] = TRANSITIONAL_IN_BODY,
 ) -> dict[str, pd.DataFrame]:
     """Per-language chunk rows of the benchmark pool: ``{lang: rows}``, with the same article ids
     in the same order for every language."""
-    pool = benchmark_eligible(df, min_chars, langs)
+    pool = benchmark_eligible(df, min_chars, langs, exclude_ids)
     return {lang: pool_rows(df, pool, lang) for lang in langs}
+
+
+def excluded_by_list(
+    df: pd.DataFrame,
+    min_chars: int = DEFAULT_MIN_CHARS,
+    langs: tuple[str, ...] = LANGS,
+    exclude_ids: Collection[str] = TRANSITIONAL_IN_BODY,
+) -> list[str]:
+    """Ids that would be in the pool but are taken out by ``exclude_ids`` (natural order). Ids that
+    fail another rule anyway (repealed, too short, not in all languages) are not reported."""
+    without = benchmark_eligible(df, min_chars, langs, exclude_ids=())
+    listed = _id_set(exclude_ids, "exclude_ids")
+    return [a for a in without["article_id"] if a in listed]
+
+
+def _id_set(ids: Iterable[str], what: str) -> frozenset[str]:
+    if isinstance(ids, str | bytes):
+        raise TypeError(f"{what} must be an iterable of article ids, not a single string")
+    if isinstance(ids, pd.DataFrame):
+        raise TypeError(f"{what} must be ids, not a DataFrame: pass pool['article_id']")
+    return frozenset(ids)
+
+
+def resolve_gold(
+    article_id: str, pool_ids: Iterable[str], known_ids: Iterable[str] | None = None
+) -> str | None:
+    """The pool article a cited id stands for, or None. Combines :func:`fedlex_bench.ids.resolve_id`
+    with pool membership: the id is normalised and resolved against ``known_ids`` (all chunk ids,
+    so that ranges such as ``210:135-149`` are found; defaults to ``pool_ids``), and the result is
+    returned only when it is in ``pool_ids`` (``benchmark_eligible(df)["article_id"]``). A cited
+    id that resolves to a repealed range or a repealed, transitional, too short or listed article
+    is therefore None: a gold label must be a benchmark-eligible article, not just an id that
+    exists."""
+    pool = _id_set(pool_ids, "pool_ids")
+    known = pool if known_ids is None else pool | _id_set(known_ids, "known_ids")
+    resolved = resolve_id(article_id, known)
+    return resolved if resolved in pool else None
 
 
 def eligibility_mismatches(df: pd.DataFrame, langs: tuple[str, ...] = LANGS) -> pd.DataFrame:
@@ -188,19 +307,25 @@ def pool_size_table(
     df: pd.DataFrame,
     thresholds: tuple[int, ...] = DEFAULT_THRESHOLDS,
     langs: tuple[str, ...] = LANGS,
+    exclude_ids: Collection[str] = TRANSITIONAL_IN_BODY,
 ) -> pd.DataFrame:
-    """Pool size per act (rows, plus a final ``ALL``) for several ``min_chars`` thresholds.
+    """Pool size per act (rows, plus a final ``ALL``) for several ``min_chars`` thresholds, with
+    the same rules as :func:`benchmark_eligible` (including ``exclude_ids``).
     ``eligible_all_langs`` is the number of articles retrieval-eligible in all languages (the
-    pool before any length rule)."""
+    pool before the length rule and the exclusion list)."""
     _require_columns(df)
+    for t in thresholds:
+        _check_min_chars(t)
     wide = _lengths_wide(df, tuple(langs)).dropna()
+    keep = ~wide.index.isin(_id_set(exclude_ids, "exclude_ids"))
     sr_of = pd.Series([a.partition(":")[0] for a in wide.index], index=wide.index)
     srs = sorted({a.partition(":")[0] for a in df["article_id"]}, key=natural_key)
     cols = ["eligible_all_langs", *[f"min_chars_{t}" for t in thresholds]]
     rows = []
     for sr in srs:
-        w = wide[sr_of == sr]
-        rows.append([len(w), *[int((w >= t).all(axis=1).sum()) for t in thresholds]])
+        in_sr = sr_of == sr
+        w = wide[in_sr & keep]
+        rows.append([int(in_sr.sum()), *[int((w >= int(t)).all(axis=1).sum()) for t in thresholds]])
     table = pd.DataFrame(rows, index=pd.Index(srs), columns=cols, dtype=int)
     table.loc["ALL"] = table.sum()
     return table
@@ -219,6 +344,10 @@ def log_counts(df: pd.DataFrame, min_chars: int, thresholds: tuple[int, ...]) ->
         log.warning("not aligned: %s eligible in %s | %s", r.article_id, r.eligible_in, r)
     pool = benchmark_eligible(df, min_chars)
     log.info("benchmark pool at min_chars=%d: %d articles", min_chars, len(pool))
+    listed = excluded_by_list(df, min_chars)
+    log.info(
+        "taken out of the pool by TRANSITIONAL_IN_BODY: %d (%s)", len(listed), ", ".join(listed)
+    )
     table = pool_size_table(df, thresholds)
     for line in table.to_string().splitlines():
         log.info("%s", line)
