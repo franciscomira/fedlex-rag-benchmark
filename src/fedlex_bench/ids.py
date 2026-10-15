@@ -8,17 +8,24 @@ Number grammar (canonical form, as made by ``ingest.normalize_article_number``):
 
     number  := [block "/"] article ["-" article]  |  block
     block   := "u" digits            transitional/final-provision block, e.g. "u12"
-    article := digits letters*       "257", "257d", "6bis", "6abis", "697l"
+    article := digits suffix?
+    suffix  := letter | ordinal | letter ordinal
+    letter  := "a" .. "z"            exactly one
+    ordinal := "bis" | "ter" | "quater" | ... | "vicies"   (``ingest.LATIN_ORDINAL``)
 
-So ``220:257d`` is an article, ``220:u12/3`` is article 3 of transitional block 12, ``220:u12`` is a
-whole block chunked without articles, and ``210:135-149`` is a **range id**.
+So ``220:257d``, ``220:6bis``, ``220:6abis`` and ``220:12ater`` are articles. Anything else after
+the digits (``135ff``, ``140xyz``, ``5aa``, ``5bisbis``) is malformed, not a number.
+``220:u12/3`` is article 3 of transitional block 12, ``220:u12`` is a whole block chunked
+without articles, and ``210:135-149`` is a **range id**.
 
 Range ids
 ---------
 Fedlex collapses runs of repealed articles into one element (e.g. SR 210 "Art. 135-149
 aufgehoben"). The chunker keeps that as a single, text-less, repealed chunk whose id is the range
 (42 such ids per language in the Phase 0 corpus). A lookup of ``210:140`` therefore finds nothing by
-exact match; :func:`resolve_id` maps it to ``210:135-149``.
+exact match; :func:`resolve_id` maps it to ``210:135-149``. The eId of Fedlex does not tell a range
+("135 bis 149") from a conjunction ("50 und 51"); in the corpus all conjunctions are adjacent
+pairs, so both are covered the same way here.
 
 Ordering of suffixed numbers (shared with :func:`fedlex_bench.chunk.natural_key`)
 -------------------------------------------------------------------------------
@@ -28,23 +35,28 @@ before multiplicatives, and a longer suffix after its prefix::
 
     6 < 6a < 6abis < 6b < 6bis < 6ter < 6quater < 7 < 10 < 257 < 257a < 257d < 257e < 257bis < 258
 
-A range ``lo-hi`` covers every number ``x`` of the same act and block with ``lo <= x <= hi`` in this
-order (both ends inclusive). Consequences, all deliberate:
+This order is used for validating ranges (``lo < hi``) and for sorting. What a range **covers** is
+deliberately narrower than the order span, so that nothing is guessed:
 
-- ``226a-226d`` covers 226a, 226b, 226c, 226d, but not the bare 226.
-- ``274-274g`` starts at the bare 274 and covers 274a..274g, but not 274bis (multiplicatives sort
-  after all single letters).
-- ``135-149`` also covers ``140a`` and ``140bis`` (they sort between 140 and 141) but not ``149a``.
-  :func:`expand_range` lists only integers and single-letter suffixes; :func:`range_covers` and
-  :func:`resolve_id` use the full order.
+- An integer range ``135-149`` covers the bare integers 135..149 only. It does not cover
+  ``140a``, ``140z`` or ``140bis``: the repealed block does not say whether an inserted 140a
+  belongs to it, so such an id resolves to ``None`` unless it is a chunk of its own.
+- A letter range ``226a-226d`` covers 226a..226d (single letters of one integer), not the bare
+  226 and not 226bis.
+- ``274-274g`` starts at the bare 274 and covers 274, 274a..274g, but not 274bis.
+- Range shapes that cannot be enumerated (``5a-7``, ``5-7bis``) cover only their two end points.
 - Ranges never cross acts or blocks: ``220:3`` is not in ``220:u12/2-4``.
+
+:func:`expand_range` lists exactly what a range covers.
 
 What happens when an id cannot be resolved
 ------------------------------------------
 :func:`resolve_id` returns ``None`` (never a guess) when the query is not a well-formed id, when no
 known id and no range covers it, when it is itself a range or a block-only id and not an exact
 known id, or when **two or more** known ranges cover it (ambiguous; overlapping ranges would be a
-data problem and are reported by the corpus-level test). An exact match always wins.
+data problem and are reported by the corpus-level test). An exact match always wins. Passing a
+single string as ``known_ids`` is a ``TypeError``. Resolving an id says nothing about whether the
+article may be used as a gold label; see :func:`fedlex_bench.eligibility.resolve_gold`.
 """
 
 from __future__ import annotations
@@ -54,7 +66,7 @@ from collections.abc import Iterable
 from typing import NamedTuple
 
 from fedlex_bench.chunk import natural_key
-from fedlex_bench.ingest import normalize_article_number
+from fedlex_bench.ingest import LATIN_ORDINAL, normalize_article_number
 
 __all__ = [
     "ArticleIdError",
@@ -85,7 +97,8 @@ class NumberSpec(NamedTuple):
 
 
 _SR_RE = re.compile(r"\d+(?:\.\d+)*")
-_ARTICLE = r"\d+[a-z]*"
+_ORDINAL = "|".join(sorted(LATIN_ORDINAL, key=len, reverse=True))
+_ARTICLE = rf"\d+(?:[a-z]?(?:{_ORDINAL})|[a-z])?"
 _BLOCK_ONLY_RE = re.compile(r"(u\d+)")
 _NUMBER_RE = re.compile(rf"(?:(u\d+)/)?({_ARTICLE})(?:-({_ARTICLE}))?")
 _SPLIT_RE = re.compile(r"(\d+)([a-z]*)")
@@ -98,8 +111,8 @@ def number_key(number: str) -> tuple:
 
 def split_number(number: str) -> NumberSpec:
     """Split the number part of an id into block, start and end. Raises :class:`ArticleIdError`
-    for anything outside the grammar, including descending or empty ranges (``149-135``,
-    ``5-5``)."""
+    for anything outside the grammar (``135ff``, ``140xyz``), including descending or empty
+    ranges (``149-135``, ``5-5``)."""
     m = _BLOCK_ONLY_RE.fullmatch(number)
     if m:
         return NumberSpec(m.group(1), "", None)
@@ -143,11 +156,29 @@ def is_range_id(article_id: str) -> bool:
         return False
 
 
+def _covers(lo: str, hi: str, x: str) -> bool:
+    """Does the range of article numbers ``lo``..``hi`` cover article number ``x``? See the module
+    docstring: integers of an integer range, single letters (plus the bare number when ``lo`` is
+    bare) of a same-integer range, otherwise only the end points. ``lo < hi`` is assumed."""
+    (ln, ls), (hn, hs), (xn, xs) = _int_and_suffix(lo), _int_and_suffix(hi), _int_and_suffix(x)
+    if ln == hn:
+        if (ls and not _is_letter(ls)) or not _is_letter(hs):
+            return x in (lo, hi)
+        if xn != ln:
+            return False
+        if not xs:
+            return not ls  # the bare number only when the range starts at it
+        return _is_letter(xs) and (ls or "a") <= xs <= hs
+    if ls or hs:
+        return x in (lo, hi)
+    return ln <= xn <= hn and not xs
+
+
 def range_covers(range_id: str, article_id: str) -> bool:
-    """True when ``article_id`` is an article of the same act and block that lies within
-    ``range_id`` (inclusive, natural order). A range or block-only id is never covered. Both
-    arguments must be well-formed (:class:`ArticleIdError` otherwise); ``range_id`` that is not a
-    range gives False."""
+    """True when ``article_id`` is an article of the same act and block that ``range_id`` covers
+    (inclusive; exactly the members of :func:`expand_range`, see the module docstring). A range
+    or block-only id is never covered. Both arguments must be well-formed
+    (:class:`ArticleIdError` otherwise); a ``range_id`` that is not a range gives False."""
     r_sr, r_number = parse_article_id(range_id)
     r = split_number(r_number)
     a_sr, a_number = parse_article_id(article_id)
@@ -156,7 +187,7 @@ def range_covers(range_id: str, article_id: str) -> bool:
         return False
     if (r_sr, r.block) != (a_sr, a.block):
         return False
-    return number_key(r.start) <= number_key(a.start) <= number_key(r.end)
+    return _covers(r.start, r.end, a.start)
 
 
 def _int_and_suffix(article: str) -> tuple[int, str]:
@@ -175,9 +206,9 @@ def expand_range(range_id: str) -> list[str]:
 
     Only these shapes are enumerable (integers, single-letter suffixes within one integer).
     Latin-multiplicative or mixed shapes (``5a-7``, ``5-7bis``) raise :class:`ArticleIdError`
-    rather than inventing members. Numbers that :func:`range_covers` accepts but that are not
-    listed here (``140a`` in ``135-149``) are still covered. Members are what the range *would*
-    contain, not a promise that each exists as an article."""
+    rather than inventing members. The list is exactly what :func:`range_covers` accepts (apart
+    from the end points of non-enumerable shapes). Members are what the range *would* contain,
+    not a promise that each exists as an article."""
     sr, number = parse_article_id(range_id)
     spec = split_number(number)
     if spec.end is None:
@@ -203,9 +234,10 @@ class IdResolver:
     and therefore cannot be used for range resolution (reported, not silently dropped)."""
 
     def __init__(self, known_ids: Iterable[str]) -> None:
+        _reject_single_string(known_ids)
         known = known_ids if isinstance(known_ids, set | frozenset) else frozenset(known_ids)
         self._known = known
-        self._ranges: dict[tuple[str, str], list[tuple[tuple, tuple, str]]] = {}
+        self._ranges: dict[tuple[str, str], list[tuple[str, str, str]]] = {}
         self.skipped: list[str] = []
         for kid in sorted(k for k in known if isinstance(k, str)):
             if "-" not in kid.partition(":")[2]:
@@ -217,8 +249,7 @@ class IdResolver:
                 self.skipped.append(kid)
                 continue
             if spec.end is not None:
-                entry = (number_key(spec.start), number_key(spec.end), kid)
-                self._ranges.setdefault((sr, spec.block), []).append(entry)
+                self._ranges.setdefault((sr, spec.block), []).append((spec.start, spec.end, kid))
 
     def resolve(self, article_id: str) -> str | None:
         """The known chunk id for ``article_id``, or None (see the module docstring)."""
@@ -232,15 +263,27 @@ class IdResolver:
             return canonical
         if spec.end is not None or not spec.start:
             return None  # a range or block-only query matches only exactly
-        key = number_key(spec.start)
-        hits = [rid for lo, hi, rid in self._ranges.get((sr, spec.block), ()) if lo <= key <= hi]
+        hits = [
+            rid
+            for lo, hi, rid in self._ranges.get((sr, spec.block), ())
+            if _covers(lo, hi, spec.start)
+        ]
         return hits[0] if len(hits) == 1 else None
+
+
+def _reject_single_string(known_ids: object) -> None:
+    if isinstance(known_ids, str | bytes):
+        raise TypeError(
+            "known_ids must be an iterable of article ids, not a single string "
+            f"(got {known_ids!r}); wrap it in a list"
+        )
 
 
 def resolve_id(article_id: str, known_ids: Iterable[str]) -> str | None:
     """Map an article id to the known chunk id that holds it: itself if known, else the single
     known range id that covers it, else None. ``known_ids`` may be any iterable of ids (consumed
-    once); for many lookups build an :class:`IdResolver` instead."""
+    once; a single string is a ``TypeError``); for many lookups build an :class:`IdResolver`."""
+    _reject_single_string(known_ids)
     try:
         canonical = normalize_article_id(article_id)
     except ArticleIdError:

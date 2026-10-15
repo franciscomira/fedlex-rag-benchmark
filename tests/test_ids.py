@@ -39,6 +39,11 @@ from fedlex_bench.ids import (
         ("220:u12/2-4", ("220", "u12/2-4")),
         ("220:u12/3", ("220", "u12/3")),
         ("220:u1", ("220", "u1")),
+        ("220:12ater", ("220", "12ater")),  # letter + Latin ordinal
+        ("220:5aquater", ("220", "5aquater")),
+        ("220:5gbis", ("220", "5gbis")),
+        ("220:5quinquies", ("220", "5quinquies")),
+        ("220:5-5bis", ("220", "5-5bis")),
     ],
 )
 def test_parse_article_id(article_id, expected):
@@ -65,6 +70,18 @@ def test_parse_article_id(article_id, expected):
         "220:u/3",
         "220:5/3",
         "220:5bis-",
+        # suffix grammar: one letter, an optional Latin ordinal, or a letter plus an ordinal
+        "220:135ff",
+        "220:140xyz",
+        "220:5aa",
+        "220:5abc",
+        "220:5bisbis",
+        "220:5bisx",
+        "220:5xbisx",
+        "220:5biss",
+        "220:5foo",
+        "220:135ff-149",
+        "220:135-149ff",
     ],
 )
 def test_parse_article_id_rejects_malformed(bad):
@@ -114,6 +131,16 @@ def test_is_range_id():
 def test_normalize_article_id(raw, expected):
     assert normalize_article_id(raw) == expected
     assert normalize_article_id(expected) == expected  # idempotent
+
+
+def test_a_conjunction_is_not_an_article_id():
+    # "Art. 50 und 51" cites two articles: it is neither one id nor the range 50-51.
+    for raw in ("210:Art. 50 und 51", "210:50 et 51", "210:50 e 51", "210:50 und 52"):
+        with pytest.raises(ArticleIdError):
+            normalize_article_id(raw)
+        assert resolve_id(raw, {"210:50-51", "210:50", "210:51"}) is None
+    # a real range with a connector still normalises
+    assert normalize_article_id("210:Art. 50 bis 51") == "210:50-51"
 
 
 def test_normalize_article_id_rejects_unparsable():
@@ -202,12 +229,18 @@ def test_range_covers_bare_number_to_letter():
     assert not range_covers("220:274-274g", "220:274bis")
 
 
-def test_range_covers_suffixed_number_between_integers():
-    # Ordering rule: 140a sorts between 140 and 141, so it is inside 135-149.
-    assert range_covers("210:135-149", "210:140a")
-    assert range_covers("210:135-149", "210:140bis")
-    # ... but nothing after the end number, 149a sorts after 149.
-    assert not range_covers("210:135-149", "210:149a")
+def test_range_covers_does_not_guess_suffixed_numbers_inside_integer_ranges():
+    # 140a sorts between 140 and 141, but "Art. 135-149" does not say whether an inserted 140a
+    # was meant to be part of it: no guess, so integer ranges cover bare integers only.
+    for x in ("140a", "140z", "140bis", "135a", "149a", "149bis"):
+        assert not range_covers("210:135-149", f"210:{x}"), x
+    assert range_covers("210:135-149", "210:136")
+
+
+def test_range_covers_never_covers_malformed_suffixes():
+    # Invalid ids are errors for range_covers, and resolve_id turns them into None.
+    with pytest.raises(ArticleIdError):
+        range_covers("210:135-149", "210:140xyz")
 
 
 def test_range_covers_never_matches_ranges_or_other_blocks():
@@ -288,6 +321,11 @@ KNOWN = {
         ("210:134", "210:134"),  # exact id wins
         ("210:150", "210:150"),
         ("210:151", None),
+        ("210:140a", None),  # suffixed number inside an integer range: not guessed
+        ("210:140z", None),
+        ("210:140bis", None),
+        ("210:135ff", None),  # malformed suffix
+        ("210:140xyz", None),
         ("210:133", None),
         ("220:226b", "220:226a-226d"),
         ("220:226d", "220:226a-226d"),
@@ -302,6 +340,7 @@ KNOWN = {
         ("220:274c", "220:274-274g"),
         ("220:274h", None),
         ("220:274bis", None),
+        ("220:274z", None),
         ("220:u12/3", "220:u12/2-4"),
         ("220:u12/5", None),
         ("220:u13/3", "220:u13/3"),
@@ -345,6 +384,17 @@ def test_resolve_id_ambiguous_overlap_is_none():
 def test_resolve_id_exact_beats_ambiguity():
     known = {"210:5-10", "210:8-12", "210:9"}
     assert resolve_id("210:9", known) == "210:9"
+
+
+def test_resolve_id_rejects_a_bare_string_for_known_ids():
+    # A str is itself an iterable of characters: "210:135-149" would silently become a set of
+    # single characters and resolve nothing.
+    with pytest.raises(TypeError, match="not a single string"):
+        resolve_id("210:140", "210:135-149")
+    with pytest.raises(TypeError, match="not a single string"):
+        IdResolver("210:135-149")
+    with pytest.raises(TypeError, match="not a single string"):
+        resolve_id("210:140", b"210:135-149")
 
 
 def test_resolve_id_accepts_any_iterable_and_empty_known():
@@ -425,9 +475,8 @@ def test_corpus_every_range_id_is_covered(corpus_df):
             members = expand_range(rid)  # raises if the range shape is not enumerable
             assert len(members) >= 2, rid
             for member in members:
-                if member in known:  # a real chunk with the same id would win (exact match)
-                    assert resolver.resolve(member) == member
-                    continue
+                # a range chunk and a chunk of its own for a member would be contradictory
+                assert member not in known, (lang, rid, member)
                 assert resolver.resolve(member) == rid, (lang, rid, member)
             # no other range claims any member
             for other in ranges:
@@ -438,6 +487,31 @@ def test_corpus_every_range_id_is_covered(corpus_df):
                 for outside in (int(spec.start) - 1, int(spec.end) + 1):
                     prefix = f"{sr}:{spec.block + '/' if spec.block else ''}"
                     assert resolver.resolve(f"{prefix}{outside}") != rid, (rid, outside)
+
+
+@corpus
+def test_corpus_no_chunk_hides_inside_the_order_span_of_a_range(corpus_df):
+    """Full-order check: no single-article chunk of the same act and block lies anywhere between
+    the two ends of a range id in the natural order (``140a`` between 135 and 149 would be a
+    chunk the range id silently shadows or fails to cover)."""
+    for lang, g in corpus_df.groupby("lang"):
+        known = set(g["article_id"])
+        singles = [a for a in known if not is_range_id(a)]
+        spans: dict[tuple[str, str], list[tuple[tuple, tuple, str]]] = {}
+        for rid in (a for a in known if is_range_id(a)):
+            sr, number = parse_article_id(rid)
+            spec = split_number(number)
+            entry = (number_key(spec.start), number_key(spec.end), rid)
+            spans.setdefault((sr, spec.block), []).append(entry)
+        assert spans
+        for aid in sorted(singles):
+            sr, number = parse_article_id(aid)
+            spec = split_number(number)
+            if not spec.start:
+                continue  # block-only id
+            key = number_key(spec.start)
+            for lo, hi, rid in spans.get((sr, spec.block), ()):
+                assert not (lo <= key <= hi), (lang, aid, "lies inside", rid)
 
 
 @corpus
