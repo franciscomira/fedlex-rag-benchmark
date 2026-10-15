@@ -11,6 +11,7 @@ from akn_fixtures import (
     ART_PARTIAL_REPEAL,
     TRANSITIONAL,
     full_act,
+    note,
     wrap,
 )
 from fedlex_bench.ingest import (
@@ -138,6 +139,18 @@ def test_repealed_or_elided_articles_are_flagged_not_dropped(parsed: dict, eid: 
     assert a.is_repealed
     assert a.text == ""
     assert a.repeal_note  # reason kept
+
+
+def test_bodyless_article_with_non_repeal_note_is_repealed() -> None:
+    # IT VVG Art. 48-49: no body, and the footnote only says "Introdotto dal ...".
+    xml = wrap(
+        '<article eId="art_48_49"><num><b>Art. 48 </b>e<b> 49</b>'
+        f"{note('Introdotto dal n. I della LF del 19 giu. 2020.')}</num></article>"
+    )
+    (a,) = parse_akn(xml)
+    assert a.number == "48-49"
+    assert a.is_repealed
+    assert a.text == ""
 
 
 def test_repeal_note_text(parsed: dict) -> None:

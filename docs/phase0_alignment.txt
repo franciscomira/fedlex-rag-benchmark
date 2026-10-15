@@ -12,11 +12,31 @@ SR 220: consolidation 2026-10-01 (applicable 2026-10-01 .. 2027-06-30; as_of 202
     de: sha256 b5aab27bc6d2e5a569e84b23b5396d3507ce6dc665270f1c48ffb86d1ec12d94  2232437 bytes
     fr: sha256 5bef56ec97c7623bfa555dc45847e1888b79903808d009685aa77ee98cab0d0f  2318427 bytes
     it: sha256 6ed78611cc9b6b7b8538b74d284910c7c34d9dc6488e740681c0a55c35e9bc2e  2210595 bytes
+SR 221.214.1: consolidation 2023-09-01 (applicable 2023-09-01 .. open; as_of 2026-10-15)  https://fedlex.data.admin.ch/eli/cc/2002/593/20230901
+    de: sha256 4c785a3de4cacaf3ed6c7ae8b5cbbce0c455d3a6c7909b3446659ccdc642d972  84929 bytes
+    fr: sha256 37def44f576aa60d154e60db1234b7a8255960201232332b3066a0b89912aa26  90150 bytes
+    it: sha256 27a3e30b5e9da84a55bf27100c1e2a78ad50c6559e1684951f5caf775910c1af  83989 bytes
+SR 221.229.1: consolidation 2024-01-01 (applicable 2024-01-01 .. open; as_of 2026-10-15)  https://fedlex.data.admin.ch/eli/cc/24/719_735_717/20240101
+    de: sha256 8b98e586f17c8ddb5eb01e71e0ad5217fdc9c15b0c0b1c0decb04eeb93fa219a  198839 bytes
+    fr: sha256 b1dcf054a0dd62ed96010434ff908282005d64e2e3261b7182e1d084df0bb700  206255 bytes
+    it: sha256 0eb7a27e89ea57706b8ec9ffaec713345bd16ef651d7c54ad62af0d61dda70a9  190957 bytes
 SR 235.1: consolidation 2025-07-07 (applicable 2025-07-07 .. open; as_of 2026-10-15)  https://fedlex.data.admin.ch/eli/cc/2022/491/20250707
     de: sha256 a99bce3dc59a5c3f25e69ed5e483380c0f1a9b57ec452fedb62e0e68b7baabef  162824 bytes
     fr: sha256 50b609dddcdb8b2b248f498de8e3a5eabfbb9e6d06674daf8fc508ab7393aeb3  167777 bytes
     it: sha256 40d05593c64b46813c4ae1289ccd51717b737fc68b173edafbd2bc824d5fa91f  157907 bytes
-articles.parquet: sha256 bc310d686ece0ffb94d6b620e5d32ca251a1e5c6ef3173d5160580d22dff20b4  (9132 rows)
+SR 241: consolidation 2025-01-01 (applicable 2025-01-01 .. open; as_of 2026-10-15)  https://fedlex.data.admin.ch/eli/cc/1988/223_223_223/20250101
+    de: sha256 e19f38c30775f808bdb43a7225fb982e6ceb83d31749009c1f818f9759360489  66528 bytes
+    fr: sha256 71e86e8e00a44f7a249948220a91b375035e115b40c13a64d2ee3d0aec6d97db  73514 bytes
+    it: sha256 2d0ad05a23d37256ead026ceafda53b0520a4dac16d61b982d1c1847932a94f3  67359 bytes
+SR 272: consolidation 2026-07-01 (applicable 2026-07-01 .. open; as_of 2026-10-15)  https://fedlex.data.admin.ch/eli/cc/2010/262/20260701
+    de: sha256 a942f0f285dce56d7454434eb3ed8dba467dc92375da6c9ad25740faf341b354  572482 bytes
+    fr: sha256 356973eb4a5e38b5db78eccbaf9fc80bf198c98e41b9d3485ff03eb875ccc474  599222 bytes
+    it: sha256 669f369c13a3bff1634fff151767702bd35f80bc0b12a0ae92e22262e4de3958  572729 bytes
+SR 281.1: consolidation 2026-01-01 (applicable 2026-01-01 .. open; as_of 2026-10-15)  https://fedlex.data.admin.ch/eli/cc/11/529_488_529/20260101
+    de: sha256 cc7ef0971b4a63f66cffb656fb98b785a6a72fbc37ab6ac4dcfea178f68aaeb2  647371 bytes
+    fr: sha256 d549d9568a1a5d627bd7365c699a6e22edb02cd8d97ee23c42773017eebe19eb  687237 bytes
+    it: sha256 eb751485c06ab82507a9fd40e678d0f665f69f9f467d34f82c1dbf43ead3fd33  644715 bytes
+articles.parquet: sha256 9b7e404de8a86e09e66716f79a3a18141c13e68064ba58916971613aae81a491  (12219 rows)
 
 1. COUNTS PER ACT AND LANGUAGE
 ------------------------------------------------------------------------
@@ -27,9 +47,24 @@ SR      lang    chunks    body  transit.  repealed historic.  in force
 220     de        1690    1602        88        91         0      1599
 220     fr        1690    1602        88        91         0      1599
 220     it        1690    1602        88        91         0      1599
+221.214.1de          46      46         0         0         0        46
+221.214.1fr          46      46         0         0         0        46
+221.214.1it          46      46         0         0         0        46
+221.229.1de         112     112         0        14         0        98
+221.229.1fr         112     112         0        14         0        98
+221.229.1it         112     112         0        14         0        98
 235.1   de          77      77         0         0         0        77
 235.1   fr          77      77         0         0         0        77
 235.1   it          77      77         0         0         0        77
+241     de          33      33         0         3         0        30
+241     fr          33      33         0         3         0        30
+241     it          33      33         0         3         0        30
+272     de         428     428         0         1         0       427
+272     fr         428     428         0         1         0       427
+272     it         428     428         0         1         0       427
+281.1   de         410     400        10         6         0       404
+281.1   fr         410     400        10         6         0       404
+281.1   it         410     400        10         6         0       404
 body = main-text articles; transit. = Schluss-/Uebergangsbestimmungen chunks (articles of
 a disp_ block, plus blocks without articles chunked whole). repealed = no text in force
 (aufgehoben/abroge/abrogato, gegenstandslos, '...' elision, amendment-of-other-act stub).
@@ -45,10 +80,15 @@ an id is the same provision in each language. See the content-level checks in se
 SR        aligned   union     rate
 210          1277    1277  100.00%
 220          1690    1690  100.00%
+221.214.1       46      46  100.00%
+221.229.1      112     112  100.00%
 235.1          77      77  100.00%
-ALL          3044    3044  100.00%
+241            33      33  100.00%
+272           428     428  100.00%
+281.1         410     410  100.00%
+ALL          4073    4073  100.00%
 Threshold 95% on id alignment: PASS
-Same rate restricted to in-force chunks: 2839/2839 = 100.00%
+Same rate restricted to in-force chunks: 3844/3844 = 100.00%
 
 3. MISSING IDS PER LANGUAGE
 ------------------------------------------------------------------------
@@ -61,20 +101,28 @@ None: is_repealed and is_historical agree across DE/FR/IT for every aligned id.
 5. CONTENT-LEVEL CHECKS (aligned ids only)
 ------------------------------------------------------------------------
 5a. eId-derived number vs number printed in <num> (per language)
-    mismatches: 1 of 9117 articles
+    mismatches: 1 of 12186 articles
     SR 220 it: eId art_697_l_697_m -> id number '697l-697m', printed '697l'
 
 5b. paragraph / item counts per article, DE vs FR vs IT
-    mismatching articles: 3 of 3044 aligned ids (format: <paragraphs>p/<items>i)
+    mismatching articles: 5 of 4073 aligned ids (format: <paragraphs>p/<items>i)
     210:94: de=1p/0i  fr=1p/0i  it=2p/0i
     220:644: de=2p/0i  fr=2p/0i  it=1p/0i
     220:1033: de=2p/3i  fr=1p/3i  it=1p/3i
+    221.229.1:95c: de=3p/3i  fr=3p/3i  it=3p/4i
+    281.1:219: de=8p/14i  fr=8p/15i  it=8p/15i
 
 5c. text-length ratio (longest/shortest of DE/FR/IT) > 1.6 (longest text > 200 chars), in-force chunks
-    flagged: 4 of 2839 aligned in-force ids
+    flagged: 10 of 3844 aligned in-force ids
+    281.1:187: ratio 1.89  de=171  fr=216  it=114
     220:1075: ratio 1.85  de=300  fr=162  it=217
+    281.1:316: ratio 1.82  de=248  fr=136  it=242
+    281.1:162: ratio 1.79  de=262  fr=148  it=146
     220:644: ratio 1.69  de=285  fr=245  it=169
+    281.1:201: ratio 1.67  de=328  fr=196  it=224
     210:336: ratio 1.67  de=227  fr=136  it=180
+    281.1:44: ratio 1.65  de=384  fr=233  it=255
+    281.1:24: ratio 1.65  de=209  fr=127  it=207
     210:339: ratio 1.62  de=298  fr=184  it=250
 
 6. BLOCKS AND ANNEXES
@@ -95,35 +143,84 @@ None: is_repealed and is_historical agree across DE/FR/IT for every aligned id.
     SR 220 it: disp_u11 | Disposizione transitoria della modifica del 19 giugno 2020 | chunked (189 chars)
     SR 220 it: disp_u15 | Disposizioni transitorie del titolo XX | chunked (1579 chars)
     SR 220 it: disp_u18 | Disposizioni finali del capo secondo del titolo XXXIV | chunked (1046 chars)
+    SR 281.1 de: disp_u2 | Schlussbestimmung zur Änderung vom 24. März 2000 | chunked (217 chars)
+    SR 281.1 de: disp_u3 | Schlussbestimmung der Änderung vom 19. Dezember 2003 | chunked (188 chars)
+    SR 281.1 de: disp_u4 | Schlussbestimmung zur Änderung vom 17. Juni 2005 | chunked (173 chars)
+    SR 281.1 de: disp_u5 | Übergangsbestimmung der Änderung vom 18. Juni 2010 | chunked (188 chars)
+    SR 281.1 de: disp_u6 | Übergangsbestimmung zur Änderung vom 21. Juni 2013 | chunked (157 chars)
+    SR 281.1 de: disp_u7 | Übergangsbestimmung zur Änderung vom 19. Juni 2020 | chunked (128 chars)
+    SR 281.1 fr: disp_u2 | Disposition finale de la modification du 24 mars 2000 | chunked (203 chars)
+    SR 281.1 fr: disp_u3 | Disposition finale de la modification du 19 décembre 2003 | chunked (194 chars)
+    SR 281.1 fr: disp_u4 | Disposition finale de la modification du 17 juin 2005 | chunked (187 chars)
+    SR 281.1 fr: disp_u5 | Disposition transitoire de la modification du 18 juin 2010 | chunked (194 chars)
+    SR 281.1 fr: disp_u6 | Disposition transitoire de la modification du 21 juin 2013 | chunked (164 chars)
+    SR 281.1 fr: disp_u7 | Disposition transitoire relative à la modification du 19 jui | chunked (129 chars)
+    SR 281.1 it: disp_u2 | Disposizione finale della modifica del 24 marzo 2000 | chunked (214 chars)
+    SR 281.1 it: disp_u3 | Disposizione finale della modifica del 19 dicembre 2003 | chunked (187 chars)
+    SR 281.1 it: disp_u4 | Disposizione finale della modifica del 17 giugno 2005 | chunked (178 chars)
+    SR 281.1 it: disp_u5 | Disposizione transitoria della modifica del 18 giugno 2010 | chunked (200 chars)
+    SR 281.1 it: disp_u6 | Disposizione transitoria della modifica del 21 giugno 2013 | chunked (166 chars)
+    SR 281.1 it: disp_u7 | Disposizione transitoria della modifica del 19 giugno 2020 | chunked (132 chars)
 6b. annexes (<components>) are NOT chunked; text left out:
+    SR 221.214.1 de: annex #1: 1142 chars, annex #2: 201 chars
+    SR 221.214.1 fr: annex #1: 1012 chars, annex #2: 195 chars
+    SR 221.214.1 it: annex #1: 942 chars, annex #2: 198 chars
     SR 235.1 de: annex #1: 268 chars, annex #2: 52 chars
     SR 235.1 fr: annex #1: 274 chars, annex #2: 51 chars
     SR 235.1 it: annex #1: 298 chars, annex #2: 59 chars
+    SR 272 de: annex #1: 243 chars, annex #2: 1170 chars
+    SR 272 fr: annex #1: 188 chars, annex #2: 1280 chars
+    SR 272 it: annex #1: 201 chars, annex #2: 1367 chars
 
 7. ARTICLES WITHOUT MARGINAL TITLE (per language; informational)
 ------------------------------------------------------------------------
 SR 210: de=6, fr=6, it=6 (in-force chunks with empty title)
 SR 220: de=20, fr=20, it=20 (in-force chunks with empty title)
+SR 221.214.1: de=2, fr=2, it=2 (in-force chunks with empty title)
+SR 221.229.1: de=0, fr=0, it=0 (in-force chunks with empty title)
 SR 235.1: de=2, fr=2, it=2 (in-force chunks with empty title)
+SR 241: de=1, fr=1, it=1 (in-force chunks with empty title)
+SR 272: de=23, fr=23, it=23 (in-force chunks with empty title)
+SR 281.1: de=2, fr=2, it=2 (in-force chunks with empty title)
 
 8. FIVE RANDOM ALIGNED IN-FORCE ARTICLES (seed=42)
 ------------------------------------------------------------------------
-=== 235.1:29 ===
---- DE | title: Einschränkungen des Rechts auf Datenherausgabe oder -übertragung
-    1 Der Verantwortliche kann die Herausgabe oder Übertragung der Personendaten aus den in Artikel 26
-    Absätze 1 und 2 aufgeführten Gründen verweigern, einschränken oder aufschieben.
-    2 Der Verantwortliche muss angeben, weshalb er die Herausgabe oder Übertragung verweigert,
-    einschränkt oder aufschiebt.
---- FR | title: Restrictions du droit à la remise ou à la transmission des données personnelles
-    1 Le responsable du traitement peut refuser, restreindre ou différer la remise ou la transmission de
-    données personnelles pour les mêmes motifs que ceux prévus à l’art. 26, al. 1 et 2.
-    2 Le responsable du traitement indique le motif pour lequel il refuse, restreint ou diffère la
-    remise ou la transmission des données personnelles.
---- IT | title: Restrizioni del diritto di farsi consegnare dati o di esigerne la trasmissione a terzi
-    1 Il titolare del trattamento può rifiutare, limitare o differire la consegna o la trasmissione dei
-    dati personali per i motivi di cui all’articolo 26 capoversi 1 e 2.
-    2 Il titolare del trattamento indica il motivo per cui rifiuta, limita o differisce la consegna o la
-    trasmissione.
+=== 221.214.1:28 ===
+--- DE | title: Prüfung der Kreditfähigkeit
+    1 …
+    2 Die Konsumentin oder der Konsument gilt dann als kreditfähig, wenn sie oder er den Konsumkredit
+    zurückzahlen kann, ohne den nicht pfändbaren Teil des Einkommens nach Artikel 93 Absatz 1 des
+    Bundesgesetzes vom 11. April 1889 über Schuldbetreibung und Konkurs beanspruchen zu müssen.
+    3 Der pfändbare Teil des Einkommens wird nach den Richtlinien über die Berechnung des
+    Existenzminimums des Wohnsitzkantons der Konsumentin oder des Konsumenten ermittelt. Bei der
+    Ermittlung zu berücksichtigen sind in jedem Fall:
+    a. der tatsächlich geschuldete Mietzins;
+    b. die nach Quellensteuertabelle geschuldeten Steuern;
+    c. Verpflichtungen, die bei der Informationsstelle gemeldet sind.
+    4 Bei der Beurteilung [...]
+--- FR | title: Examen de la capacité de contracter un crédit
+    1 …
+    2 Le consommateur est réputé avoir la capacité de contracter un crédit lorsqu’il peut rembourser ce
+    crédit sans grever la part insaisissable de son revenu visée à l’art. 93, al. 1, de la loi fédérale
+    du 11 avril 1889 sur la poursuite pour dettes et la faillite.
+    3 La part saisissable du revenu est déterminée selon les directives concernant le calcul du minimum
+    vital édictées par le canton de domicile du consommateur. Dans tous les cas, il sera tenu compte:
+    a. du loyer effectivement dû;
+    b. du montant de l’impôt dû, calculé d’après le barème de l’impôt à la source;
+    c. des engagements communiqués au centre de renseignements.
+    4 La capacité de contracter un crédit à la consommation est examiné [...]
+--- IT | title: Esame della capacità creditizia
+    1 ...
+    2 Il consumatore è ritenuto capace di credito quando è in grado di rimborsare il credito al consumo
+    senza gravare la parte impignorabile del reddito secondo l’articolo 93 capoverso 1 della legge
+    federale dell’11 aprile 1889 sulla esecuzione e sul fallimento.
+    3 La parte pignorabile del reddito è determinata in base alle direttive sul calcolo del minimo
+    esistenziale del Cantone di domicilio del consumatore. In ogni caso, nel corso dell’accertamento
+    occorre tenere conto:
+    a. della pigione effettivamente dovuta;
+    b. delle imposte dovute in base alla tabella dell’imposta alla fonte;
+    c. degli obblighi notificati presso la Centrale d’informazione.
+    4 Nella valutazione della capacità creditizia o [...]
 
 === 210:412 ===
 --- DE | title: Besondere Geschäfte
@@ -173,6 +270,20 @@ SR 235.1: de=2, fr=2, it=2 (in-force chunks with empty title)
     imporle di procedere a una revisione ordinaria se necessario per valutarne affidabilmente la
     situazione patrimoniale e reddituale.
 
+=== 272:190 ===
+--- DE | title: (none)
+    1 Das Gericht kann Amtsstellen um schriftliche Auskunft ersuchen.
+    2 Es kann von Privatpersonen schriftliche Auskünfte einholen, wenn eine Zeugenbefragung nicht
+    erforderlich erscheint.
+--- FR | title: (none)
+    1 Le tribunal peut requérir des renseignements écrits de services officiels.
+    2 Il peut requérir des renseignements écrits de personnes dont la comparution à titre de témoin ne
+    semble pas nécessaire.
+--- IT | title: (none)
+    1 Il giudice può raccogliere informazioni scritte presso pubblici uffici.
+    2 Può raccogliere informazioni scritte anche presso privati, se un esame testimoniale non appare
+    necessario.
+
 === 220:56 ===
 --- DE | title: Ersatzpflicht
     1 Für den von einem Tier angerichteten Schaden haftet, wer dasselbe hält, wenn er nicht nachweist,
@@ -195,24 +306,4 @@ SR 235.1: de=2, fr=2, it=2 (in-force chunks with empty title)
     2 Gli è salvo il regresso se l’animale sia stato aizzato da terza persona o dall’animale di un
     altro.
     3 …
-
-=== 210:929 ===
---- DE | title: Zulässigkeit und Verjährung der Klage
-    1 Die Klage aus verbotener Eigenmacht ist nur zulässig, wenn der Besitzer sofort, nachdem ihm der
-    Eingriff und der Täter bekannt geworden sind, die Sache zurückfordert oder Beseitigung der Störung
-    verlangt.
-    2 Die Klage verjährt nach Ablauf eines Jahres; das mit der Entziehung oder Störung zu laufen
-    beginnt, auch wenn der Besitzer erst später von dem Eingriff und dem Täter Kenntnis erhalten hat.
---- FR | title: Déchéance et prescription
-    1 Le possesseur est déchu de son action, s’il ne réclame pas la restitution de la chose ou la
-    cessation du trouble aussitôt après avoir connu le fait et l’auteur de l’atteinte portée à son
-    droit.
-    2 Son action se prescrit par un an; ce délai court dès le jour de l’usurpation ou du trouble, même
-    si le possesseur n’a connu que plus tard l’atteinte subie et l’auteur de celle-ci.
---- IT | title: Ammissibilità e prescrizione dell’azione
-    1 Le azioni contro l’illecita violenza sono ammissibili solo quando il possessore abbia
-    immediatamente reclamato la restituzione della cosa o la cessazione della turbativa, appena
-    conosciuto l’atto di violenza e l’autore di esso.
-    2 L’azione si prescrive in un anno, il quale comincia a decorrere dalla spogliazione o dalla
-    turbativa, anche se il possessore ha avuto più tardi conoscenza del fatto e del suo autore.
 

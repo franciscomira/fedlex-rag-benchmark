@@ -34,7 +34,16 @@ from lxml import etree
 log = logging.getLogger("fedlex_bench.ingest")
 
 SPARQL_ENDPOINT = "https://fedlex.data.admin.ch/sparqlendpoint"
-DEFAULT_ACTS: tuple[str, ...] = ("210", "220", "235.1")
+DEFAULT_ACTS: tuple[str, ...] = (
+    "210",  # Civil Code
+    "220",  # Code of Obligations
+    "221.214.1",  # Consumer Credit Act
+    "221.229.1",  # Insurance Contract Act
+    "235.1",  # Data Protection Act
+    "241",  # Unfair Competition Act
+    "272",  # Civil Procedure Code
+    "281.1",  # Debt Enforcement and Bankruptcy Act
+)
 LANGS: tuple[str, ...] = ("de", "fr", "it")
 # Fixed snapshot date so that a re-run reproduces the same consolidation (not "today").
 DEFAULT_AS_OF = "2026-10-15"
@@ -636,8 +645,9 @@ def parse_akn(xml: bytes | str | Path) -> list[ParsedArticle]:
       :class:`ParsedArticle`).
     - A block without any ``<article>`` but with substantive text is chunked as one
       pseudo-article ``uN`` (``kind='transitional'``).
-    - ``is_repealed``: no substantive text in force. True when the article has no body and a
-      footnote says "aufgehoben / abroge / abrogato" (or "gegenstandslos" = obsolete), or its
+    - ``is_repealed``: no substantive text in force. True when the article has no body (a
+      footnote usually says "aufgehoben / abroge / abrogato" or "gegenstandslos" = obsolete, but
+      some files only carry an "introduced by" note), or its
       entire text is such a stub or Fedlex's elision mark, or (transitional only) it is an
       amendment-of-another-act introduction followed by the elision mark. Such articles keep an
       empty text.
@@ -657,8 +667,10 @@ def parse_akn(xml: bytes | str | Path) -> list[ParsedArticle]:
             block_heading = _unit_heading(units[0]) if units else ""
         text = text_of(_strip(art, ("num", "heading")))
         note = _repeal_note(art)
+        # An article with no body at all has no text in force, even when its footnote does not
+        # say so (IT VVG Art. 48-49 only carries "Introdotto dal ...").
         repealed = (
-            (not text and bool(note))
+            not text
             or _is_repealed_stub(text)
             or (kind == "transitional" and _is_amendment_stub(text))
         )
