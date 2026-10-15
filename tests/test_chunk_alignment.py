@@ -292,24 +292,35 @@ def test_footnote_coverage_counts_per_act_and_language() -> None:
     assert "rebuild" in alignment.footnote_coverage_lines(legacy)[0]
 
 
-def _manifest_and_raw(tmp_path) -> dict:
-    manifest = {
-        "220": {
-            "sr": "220",
+LANGS3 = ("de", "fr", "it")
+
+
+def _manifest_and_raw(tmp_path, acts: tuple[str, ...] = ("220",), write_raw: bool = True) -> dict:
+    """A manifest whose urls match what ``_df`` writes into ``source_url`` and whose sha256 values
+    are those of the raw files written to ``tmp_path``."""
+    manifest = {}
+    for sr in acts:
+        entry = {
+            "sr": sr,
             "consolidation_date": "2026-10-01",
             "consolidation_end": None,
             "as_of": "2026-10-15",
             "consolidation": "c",
             "files": {
-                lang: {"format": "xml", "url": f"u/{lang}-xml-3.xml", "sha256": "ab" * 32}
-                for lang in ("de", "fr", "it")
+                lang: {"format": "xml", "url": f"https://x/{lang}.xml", "sha256": ""}
+                for lang in LANGS3
             },
         }
-    }
-    for lang in ("de", "fr", "it"):
-        p = ingest.file_path(manifest["220"], lang, tmp_path)
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_bytes(wrap(ART_12_BIS))
+        manifest[sr] = entry
+        for lang in LANGS3:
+            p = ingest.file_path(entry, lang, tmp_path)
+            if write_raw:
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_bytes(wrap(ART_12_BIS))
+                entry["files"][lang]["sha256"] = ingest.sha256_of(p)
+                entry["files"][lang]["bytes"] = p.stat().st_size
+            else:
+                entry["files"][lang]["sha256"] = "ab" * 32
     return manifest
 
 
@@ -324,7 +335,7 @@ def test_report_states_what_id_alignment_shows_and_passes_or_fails(tmp_path) -> 
     assert "None: every article_id exists" in report
     assert "same article structure" in report and "does NOT show" in report
     assert f"articles.parquet: sha256 {digest}" in report  # parquet hash recorded
-    assert "ab" * 32 in report  # raw file hashes recorded
+    assert manifest["220"]["files"]["de"]["sha256"] in report  # raw file hashes recorded
     for section in ("5a.", "5b.", "5c.", "6b."):
         assert section in report
 
@@ -333,3 +344,118 @@ def test_report_states_what_id_alignment_shows_and_passes_or_fails(tmp_path) -> 
 
     broken = _df({"de": arts, "fr": arts, "it": arts[:1]})
     assert "FAIL for 220, ALL" in alignment.build_report(broken, manifest, raw_dir=tmp_path)
+
+
+# ---------------------------------------------------------------- report inputs are verified
+
+
+def test_report_covers_only_the_acts_in_the_parquet(tmp_path) -> None:
+    arts = [_pa("1", "Text eins.")]
+    df = _df({"de": arts, "fr": arts, "it": arts}, sr="220")
+    # the manifest knows two more acts whose raw files are not even present
+    manifest = _manifest_and_raw(tmp_path, acts=("220",))
+    manifest.update(_manifest_and_raw(tmp_path, acts=("221.229.1", "235.1"), write_raw=False))
+    report = alignment.build_report(df, manifest, raw_dir=tmp_path)
+    assert "SR 220:" in report
+    assert "221.229.1" not in report and "235.1" not in report
+
+
+def test_report_acts_are_in_natural_order(tmp_path) -> None:
+    arts = [_pa("1", "Text eins.")]
+    frames = [_df({lang: arts for lang in LANGS3}, sr=sr) for sr in ("281.1", "220", "221.229.1")]
+    df = pd.concat(frames, ignore_index=True)
+    manifest = _manifest_and_raw(tmp_path, acts=("281.1", "220", "221.229.1"))
+    report = alignment.build_report(df, manifest, raw_dir=tmp_path)
+    prov = [ln for ln in report.splitlines() if ln.startswith("SR ") and "consolidation" in ln]
+    assert [ln.split(":")[0] for ln in prov] == ["SR 220", "SR 221.229.1", "SR 281.1"]
+
+
+def test_report_refuses_a_parquet_built_from_other_urls_than_the_manifest(tmp_path) -> None:
+    arts = [_pa("1", "Text eins.")]
+    df = _df({lang: arts for lang in LANGS3})
+    manifest = _manifest_and_raw(tmp_path)
+    manifest["220"]["files"]["fr"]["url"] = "https://x/other-revision.xml"
+    with pytest.raises(alignment.InputMismatchError, match="220/fr.*source_url"):
+        alignment.build_report(df, manifest, raw_dir=tmp_path)
+
+
+def test_report_refuses_an_act_missing_from_the_manifest(tmp_path) -> None:
+    arts = [_pa("1", "Text eins.")]
+    df = pd.concat(
+        [_df({lang: arts for lang in LANGS3}, sr=sr) for sr in ("220", "210")], ignore_index=True
+    )
+    manifest = _manifest_and_raw(tmp_path)  # only 220
+    with pytest.raises(alignment.InputMismatchError, match="210"):
+        alignment.build_report(df, manifest, raw_dir=tmp_path)
+
+
+def test_report_checks_the_raw_sha256_before_reparsing(tmp_path) -> None:
+    arts = [_pa("1", "Text eins.")]
+    df = _df({lang: arts for lang in LANGS3})
+    manifest = _manifest_and_raw(tmp_path)
+    path = ingest.file_path(manifest["220"], "it", tmp_path)
+    path.write_bytes(b"this is not even xml")  # would fail to parse, but the sha check comes first
+    with pytest.raises(alignment.InputMismatchError, match="220/it.*sha256"):
+        alignment.build_report(df, manifest, raw_dir=tmp_path)
+
+
+def test_report_refuses_a_missing_raw_file(tmp_path) -> None:
+    arts = [_pa("1", "Text eins.")]
+    df = _df({lang: arts for lang in LANGS3})
+    manifest = _manifest_and_raw(tmp_path)
+    ingest.file_path(manifest["220"], "de", tmp_path).unlink()
+    with pytest.raises(alignment.InputMismatchError, match="220/de"):
+        alignment.build_report(df, manifest, raw_dir=tmp_path)
+
+
+def test_report_refuses_a_different_consolidation_date(tmp_path) -> None:
+    arts = [_pa("1", "Text eins.")]
+    df = _df({lang: arts for lang in LANGS3})
+    manifest = _manifest_and_raw(tmp_path)
+    manifest["220"]["consolidation_date"] = "2025-01-01"
+    with pytest.raises(alignment.InputMismatchError, match="consolidation_date"):
+        alignment.build_report(df, manifest, raw_dir=tmp_path)
+
+
+def test_displayed_conjunction_matches_the_eid_derived_range(tmp_path) -> None:
+    # "Art. 50 und 51" is displayed as "50,51"; eId art_50_51 gives id number "50-51": no mismatch.
+    conj = _pa("50-51", displayed="50,51")
+    wrong = _pa("52-53", displayed="50,51")
+    mm = alignment.displayed_number_mismatches(_struct(de=[conj, wrong]))
+    assert mm["article_id"].tolist() == ["220:52-53"]
+
+
+# ---------------------------------------------------------------- corpus rebuild is deterministic
+
+_MANIFEST = ingest.load_manifest()
+
+
+def _raw_present() -> bool:
+    if not _MANIFEST:
+        return False
+    return all(ingest.file_path(e, lang).exists() for e in _MANIFEST.values() for lang in LANGS3)
+
+
+@pytest.mark.skipif(not _raw_present(), reason="data/raw not downloaded")
+def test_corpus_rebuild_from_shuffled_input_gives_the_same_parquet_hash(tmp_path) -> None:
+    acts = tuple(sorted(_MANIFEST))
+    baseline = chunk.build_articles(_MANIFEST, acts=acts)
+    h_baseline = chunk.write_parquet(baseline, tmp_path / "baseline.parquet")
+
+    # acts and languages handed over in reverse order
+    h_reversed = chunk.write_parquet(
+        chunk.build_articles(_MANIFEST, acts=acts[::-1], langs=LANGS3[::-1]),
+        tmp_path / "reversed.parquet",
+    )
+    # rows shuffled with two different seeds, then sorted again
+    hashes = {h_baseline, h_reversed}
+    for seed in (1, 2):
+        shuffled = baseline.sample(frac=1.0, random_state=seed).reset_index(drop=True)
+        assert not shuffled["article_id"].equals(baseline["article_id"])
+        out = tmp_path / f"s{seed}.parquet"
+        hashes.add(chunk.write_parquet(chunk.sort_articles(shuffled), out))
+    assert len(hashes) == 1, hashes
+
+    # and it is the parquet that is on disk (the one the report and the pool numbers come from)
+    if chunk.ARTICLES_PARQUET.exists():
+        assert ingest.sha256_of(chunk.ARTICLES_PARQUET) == h_baseline

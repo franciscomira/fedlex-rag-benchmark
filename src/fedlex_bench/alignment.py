@@ -12,7 +12,10 @@ Two different questions are answered, and they must not be confused:
 Section 8 of the report is informational: how many chunks carry footnotes (``footnotes`` column)
 per act and language.
 
-The command exits non-zero when id alignment drops below 95% overall or for any act.
+The command exits non-zero when id alignment drops below 95% overall or for any act. It reports
+on the acts present in the parquet only, and refuses to run (exit code 2) when the parquet does
+not belong to the manifest: a different ``source_url`` or consolidation date, a missing raw file,
+or a raw file whose sha256 differs from the manifest (checked before the raw XML is re-parsed).
 
 Run: ``uv run python -m fedlex_bench.alignment``.
 """
@@ -24,6 +27,7 @@ import hashlib
 import logging
 import random
 import textwrap
+from collections.abc import Iterable
 from pathlib import Path
 
 import pandas as pd
@@ -37,6 +41,7 @@ from fedlex_bench.ingest import (
     file_path,
     load_manifest,
     parse_akn,
+    sha256_of,
     unarticled_units,
     unchunked_components,
 )
@@ -49,6 +54,63 @@ MIN_RATE = 0.95
 LENGTH_RATIO = 1.6
 LENGTH_MIN_CHARS = 200
 MAX_LISTED = 40  # cap on lines per listing in the report (totals are always exact)
+
+
+# ------------------------------------------------------------------ inputs
+
+
+class InputMismatchError(RuntimeError):
+    """The parquet and the manifest/raw files do not describe the same snapshot."""
+
+
+def acts_in(df: pd.DataFrame) -> list[str]:
+    """SR numbers present in the parquet, in natural order."""
+    return sorted(df["sr"].unique(), key=natural_key)
+
+
+def verify_inputs(df: pd.DataFrame, manifest: dict, raw_dir: Path = RAW_DIR) -> None:
+    """Check, for every act and language in ``df``, that the manifest describes the snapshot the
+    parquet was built from, before any raw XML is parsed again:
+
+    - the act and its three languages are in the manifest;
+    - every ``source_url`` of the parquet is the manifest URL plus a ``#<eId>`` fragment, and the
+      consolidation date agrees;
+    - the raw file exists and its sha256 equals the one recorded in the manifest.
+
+    Raises :class:`InputMismatchError` listing the first problem found."""
+    for sr in acts_in(df):
+        entry = manifest.get(sr)
+        if entry is None:
+            raise InputMismatchError(f"SR {sr} is in the parquet but not in the manifest")
+        for lang in LANGS:
+            what = f"SR {sr}/{lang}"
+            f = entry.get("files", {}).get(lang)
+            g = df[(df["sr"] == sr) & (df["lang"] == lang)]
+            if f is None or g.empty:
+                raise InputMismatchError(f"{what}: missing in the manifest or in the parquet")
+            urls = {u.partition("#")[0] for u in g["source_url"]}
+            if urls != {f["url"]}:
+                raise InputMismatchError(
+                    f"{what}: source_url in the parquet {sorted(urls)} differs from the manifest "
+                    f"url {f['url']!r}; rebuild the parquet with fedlex_bench.chunk"
+                )
+            dates = set(g["consolidation_date"])
+            if dates != {entry["consolidation_date"]}:
+                raise InputMismatchError(
+                    f"{what}: consolidation_date in the parquet {sorted(dates)} differs from the "
+                    f"manifest {entry['consolidation_date']!r}"
+                )
+            path = file_path(entry, lang, raw_dir)
+            if not path.exists():
+                raise InputMismatchError(f"{what}: raw file {path} is missing")
+            expected = f.get("sha256")
+            if expected and sha256_of(path) != expected:
+                raise InputMismatchError(
+                    f"{what}: raw file sha256 {sha256_of(path)[:12]}... differs from the manifest "
+                    f"sha256 {expected[:12]}... ({path.name})"
+                )
+            if not expected:
+                log.warning("%s: no sha256 recorded in the manifest, raw file not verified", what)
 
 
 # ------------------------------------------------------------------ id alignment
@@ -98,11 +160,14 @@ def flag_disagreements(df: pd.DataFrame, column: str = "is_repealed") -> pd.Data
 # ------------------------------------------------------------------ content-level checks
 
 
-def structure_table(manifest: dict, raw_dir: Path = RAW_DIR) -> pd.DataFrame:
+def structure_table(
+    manifest: dict, raw_dir: Path = RAW_DIR, acts: Iterable[str] | None = None
+) -> pd.DataFrame:
     """Per (sr, lang, article_id): eId, printed number and paragraph/item counts, re-parsed from
-    the raw XML (these fingerprints are not stored in the parquet)."""
+    the raw XML (these fingerprints are not stored in the parquet). ``acts`` limits it to the
+    acts of the parquet (default: every act of the manifest)."""
     rows: list[dict] = []
-    for sr in sorted(manifest):
+    for sr in sorted(manifest if acts is None else acts, key=natural_key):
         for lang in LANGS:
             for a in parse_akn(file_path(manifest[sr], lang, raw_dir)):
                 rows.append(
@@ -122,10 +187,12 @@ def structure_table(manifest: dict, raw_dir: Path = RAW_DIR) -> pd.DataFrame:
 
 def displayed_number_mismatches(struct: pd.DataFrame) -> pd.DataFrame:
     """Articles whose printed number (normalised) differs from the eId-derived number. Block
-    pseudo-articles (no printed number) are skipped."""
+    pseudo-articles (no printed number) are skipped. A printed conjunction ("Art. 50 und 51") is
+    displayed as ``50,51`` and compares equal to the eId-derived ``50-51``: the eId cannot tell a
+    conjunction from a range, and the three languages print the same eId differently."""
     s = struct[struct["displayed_number"] != ""]
     tail = s["number"].str.rsplit("/", n=1).str[-1]
-    return s[s["displayed_number"] != tail]
+    return s[s["displayed_number"].str.replace(",", "-", regex=False) != tail]
 
 
 def structure_mismatches(struct: pd.DataFrame) -> pd.DataFrame:
@@ -220,6 +287,8 @@ def build_report(
     raw_dir: Path = RAW_DIR,
     parquet_path: Path | None = None,
 ) -> str:
+    verify_inputs(df, manifest, raw_dir)  # raises InputMismatchError before any raw XML is read
+    acts = acts_in(df)
     L: list[str] = []
     add = L.append
     rule = "-" * 72
@@ -229,7 +298,7 @@ def build_report(
     add("")
     add("PROVENANCE")
     add(rule)
-    for sr in sorted(manifest):
+    for sr in acts:
         e = manifest[sr]
         add(
             f"SR {sr}: consolidation {e['consolidation_date']} "
@@ -327,7 +396,7 @@ def build_report(
         add("None: is_repealed and is_historical agree across DE/FR/IT for every aligned id.")
     add("")
 
-    struct = structure_table(manifest, raw_dir)
+    struct = structure_table(manifest, raw_dir, acts)
     add("5. CONTENT-LEVEL CHECKS (aligned ids only)")
     add(rule)
     add("5a. eId-derived number vs number printed in <num> (per language)")
@@ -376,7 +445,7 @@ def build_report(
     add(rule)
     add("6a. transitional/final-provision blocks without <article>: chunked whole as '<SR>:u<N>'")
     n_units = 0
-    for sr in sorted(manifest):
+    for sr in acts:
         for lang in LANGS:
             for eid, heading, n_chars in unarticled_units(file_path(manifest[sr], lang, raw_dir)):
                 n_units += 1
@@ -386,7 +455,7 @@ def build_report(
         add("    None.")
     add("6b. annexes (<components>) are NOT chunked; text left out:")
     n_comp = 0
-    for sr in sorted(manifest):
+    for sr in acts:
         for lang in LANGS:
             comps = unchunked_components(file_path(manifest[sr], lang, raw_dir))
             if comps:
@@ -428,7 +497,11 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     df = pd.read_parquet(args.parquet)
-    report = build_report(df, load_manifest(args.manifest), parquet_path=args.parquet)
+    try:
+        report = build_report(df, load_manifest(args.manifest), parquet_path=args.parquet)
+    except InputMismatchError as exc:
+        log.error("inputs do not match: %s", exc)
+        return 2
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(report, encoding="utf-8", newline="\n")
     log.info("wrote %s", args.out)

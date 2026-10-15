@@ -19,6 +19,7 @@ Run ``uv run python -m fedlex_bench.ingest`` to execute discovery + download.
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import logging
@@ -419,8 +420,11 @@ _SUFFIX_WORDS = (
 LATIN_ORDINAL = {w: i + 2 for i, w in enumerate(_SUFFIX_WORDS)}
 _SUFFIX_RE = re.compile("(?:" + "|".join(sorted(_SUFFIX_WORDS, key=len, reverse=True)) + r"|[a-z])")
 
-# Connectors between two article numbers in "Art. 50 und 51" / "135 à 149" / "135 a 149".
-_RANGE_WORDS = {"und", "et", "e", "à", "a", "au", "bis"}
+# Connectors between two article numbers. "135 à 149" / "135 a 149" / "135 bis 149" are ranges
+# (everything from 135 to 149); "50 und 51" / "50 et 51" / "50 e 51" are conjunctions (exactly
+# articles 50 and 51). The two must not be confused: "50 und 52" is not "50-52".
+_RANGE_WORDS = {"à", "a", "au", "bis"}
+_CONJ_WORDS = {"und", "et", "e"}
 
 _SPACE_CHARS = "".join(chr(c) for c in (0xA0, 0x202F, 0x2009, 0x2007, 0x2002, 0x2003, 0xFEFF))
 _SPACE_RE = re.compile(f"[{_SPACE_CHARS}]")
@@ -432,15 +436,17 @@ _WS_RE = re.compile(r"\s+")
 _ART_PREFIX_RE = re.compile(r"^\s*(?:art(?:icle|icolo|ikel)?s?\.?|§)\s*", re.IGNORECASE)
 
 
-def normalize_article_number(raw: str) -> str:
-    """Normalise a displayed article number to the id form.
+def normalize_article_numbers(raw: str) -> list[str]:
+    """Normalise a displayed article number to the id form, one entry per cited article.
 
-    ``"Art. 257 d"`` -> ``"257d"``, ``"Art. 12bis"`` -> ``"12bis"``, ``"Art. 8 bis"`` ->
-    ``"8bis"``, ``"art. 6a bis"`` -> ``"6abis"``, ``"Art. 135-149"`` -> ``"135-149"``,
-    ``"Art. 2 4"`` -> ``"2-4"`` (other whitespace-separated parts are joined with ``-``).
-    Hyphen, non-breaking hyphen (U+2011), en/em dash and minus all count as ``-``. The result is
-    lowercase with no whitespace.
-    """
+    ``"Art. 257 d"`` -> ``["257d"]``, ``"Art. 12bis"`` -> ``["12bis"]``, ``"Art. 8 bis"`` ->
+    ``["8bis"]``, ``"art. 6a bis"`` -> ``["6abis"]``, ``"Art. 2 4"`` -> ``["2-4"]`` (other
+    whitespace-separated parts are joined with ``-``). A **range** ("135 à 149", "135 a 149",
+    "135 bis 149", "135-149", also en/em dash or minus) stays one entry ``"135-149"``. A
+    **conjunction** ("50 und 51", "50 et 51", "50 e 51") is split into separate entries
+    ``["50", "51"]``, never turned into a range, because "50 und 52" does not cover 51. A
+    connector counts only when a digit follows it, so ``"257 e"`` is article 257e. Each entry is
+    lowercase with no whitespace; an empty input gives ``[]``."""
     s = unicodedata.normalize("NFKC", raw or "")
     s = _SPACE_RE.sub(" ", s)
     s = _ART_PREFIX_RE.sub("", s).strip().lower()
@@ -448,20 +454,34 @@ def normalize_article_number(raw: str) -> str:
     s = re.sub(r"(?<=[0-9a-z])à(?=\d)", " à ", s)  # glued FR range "663dà663h"
     s = s.rstrip(".").strip()
     toks = s.split()
+    parts: list[str] = []
     out = ""
     for i, tok in enumerate(toks):
         nxt = toks[i + 1] if i + 1 < len(toks) else ""
-        if not out:
+        if tok in _CONJ_WORDS and nxt[:1].isdigit() and out:
+            parts.append(out)  # "50 und 51": the next number starts a new, separate id
+            out = ""
+        elif not out:
             out = tok
         elif tok in _RANGE_WORDS and nxt[:1].isdigit():
-            out += "-"  # "135 a 149", "50 und 51", "28d a 28f" -> "135-149", ...
+            out += "-"  # "135 a 149", "28d a 28f" -> "135-149", "28d-28f"
         elif _SUFFIX_RE.fullmatch(tok):
             out += tok  # "257 d" -> "257d", "8 bis" -> "8bis"
         elif out.endswith("-"):
             out += tok
         else:
             out += "-" + tok  # "2 4" -> "2-4"
-    return out
+    if out:
+        parts.append(out)
+    return parts
+
+
+def normalize_article_number(raw: str) -> str:
+    """Single-string form of :func:`normalize_article_numbers`: the entries joined with ``","``,
+    so a conjunction stays visibly two numbers (``"Art. 50 und 51"`` -> ``"50,51"``) and is never
+    mistaken for a range. A comma is not valid in an article id, so a conjunction can never be
+    used as one; use :func:`normalize_article_numbers` to get separate ids."""
+    return ",".join(normalize_article_numbers(raw))
 
 
 def number_from_eid(eid: str) -> str:
@@ -619,7 +639,11 @@ def _is_amendment_stub(text: str) -> bool:
 
 
 def _article_number(article: etree._Element) -> str:
-    """Prefer the eId (machine key, identical across languages); fall back to ``num``."""
+    """Prefer the eId (machine key, identical across languages); fall back to ``num``. The
+    fallback can return several numbers joined with ``","`` (a printed conjunction such as
+    "Art. 50 und 51"); :func:`parse_akn` turns each into its own chunk. An eId such as
+    ``art_50_51`` stays one id ``50-51`` because DE/FR/IT print the same eId differently (DE
+    "Art. 463-464", FR "Art. 463 et 464") and the id must be identical in all three."""
     eid = article.get("eId") or ""
     if re.search(r"(^|/)art_", eid):
         return number_from_eid(eid)
@@ -654,7 +678,7 @@ def _read_root(xml: bytes | str | Path) -> etree._Element:
 
 
 def _strip(el: etree._Element, tags: tuple[str, ...]) -> etree._Element:
-    clone = etree.fromstring(etree.tostring(el))
+    clone = copy.deepcopy(el)  # not tostring+fromstring: that re-parses entity references
     for tag in tags:
         for child in clone.findall(f"a:{tag}", NS):
             clone.remove(child)
@@ -664,7 +688,9 @@ def _strip(el: etree._Element, tags: tuple[str, ...]) -> etree._Element:
 def parse_akn(xml: bytes | str | Path) -> list[ParsedArticle]:
     """Parse an Akoma Ntoso act into articles, in document order (articles, then block units).
 
-    - Main-body articles get ``kind='article'`` and number e.g. ``257d``.
+    - Main-body articles get ``kind='article'`` and number e.g. ``257d``. The number comes from
+      the eId; only an article without an ``art_`` eId falls back to its printed number, and a
+      printed conjunction there ("Art. 50 und 52") yields one chunk per cited article.
     - Articles inside ``transitional``/``proviso`` blocks (eId prefix ``disp_uN/``, e.g. the
       Schlusstitel) get ``kind='transitional'`` and number ``uN/<n>`` so that they never collide
       with body articles that carry the same number. ``uN`` is positional per snapshot (see
@@ -686,12 +712,12 @@ def parse_akn(xml: bytes | str | Path) -> list[ParsedArticle]:
     out: list[ParsedArticle] = []
     for art in root.iterfind(".//a:article", NS):
         eid = art.get("eId") or ""
-        number = _article_number(art)
+        numbers = _article_number(art).split(",")  # several only for a printed conjunction
         kind, block_heading = "article", ""
         m = re.match(r"^disp_(u\d+)/", eid)
         if m:
             kind = "transitional"
-            number = f"{m.group(1)}/{number}"
+            numbers = [f"{m.group(1)}/{n}" for n in numbers]
             units = art.xpath("ancestor::a:transitional | ancestor::a:proviso", namespaces=NS)
             block_heading = _unit_heading(units[0]) if units else ""
         text = text_of(_strip(art, ("num", "heading")))
@@ -706,23 +732,27 @@ def parse_akn(xml: bytes | str | Path) -> list[ParsedArticle]:
         if repealed and not note:
             note = text
         num = art.find("a:num", NS)
-        out.append(
-            ParsedArticle(
-                number=number,
-                kind=kind,
-                eid=eid,
-                title=_marginal_title(art, has_body=bool(text)),
-                text="" if repealed else text,
-                is_repealed=repealed,
-                repeal_note=note if repealed else "",
-                is_historical=kind == "transitional" and bool(_HISTORICAL_RE.search(block_heading)),
-                block_heading=block_heading,
-                displayed_number=normalize_article_number(text_of(num)) if num is not None else "",
-                n_paragraphs=len(art.findall(".//a:paragraph", NS)),
-                n_items=len(art.findall(".//a:item", NS)),
-                footnotes=footnotes_of(art),
+        for number in numbers:  # one chunk per cited article; same content for each
+            out.append(
+                ParsedArticle(
+                    number=number,
+                    kind=kind,
+                    eid=eid,
+                    title=_marginal_title(art, has_body=bool(text)),
+                    text="" if repealed else text,
+                    is_repealed=repealed,
+                    repeal_note=note if repealed else "",
+                    is_historical=kind == "transitional"
+                    and bool(_HISTORICAL_RE.search(block_heading)),
+                    block_heading=block_heading,
+                    displayed_number=(
+                        normalize_article_number(text_of(num)) if num is not None else ""
+                    ),
+                    n_paragraphs=len(art.findall(".//a:paragraph", NS)),
+                    n_items=len(art.findall(".//a:item", NS)),
+                    footnotes=footnotes_of(art),
+                )
             )
-        )
     for unit in _units(root):
         if unit.find(".//a:article", NS) is not None:
             continue

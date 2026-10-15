@@ -14,8 +14,10 @@ from akn_fixtures import (
     note,
     wrap,
 )
+from fedlex_bench import ingest
 from fedlex_bench.ingest import (
     normalize_article_number,
+    normalize_article_numbers,
     number_from_eid,
     parse_akn,
     pick_consolidation,
@@ -44,9 +46,14 @@ from fedlex_bench.ingest import (
         ("Art. 135–149", "135-149"),  # en dash range
         ("Art. 135 à 149", "135-149"),  # FR range
         ("Art. 135 a 149", "135-149"),  # IT range (connector, not a suffix)
-        ("Art. 50 und 51", "50-51"),
-        ("Art. 50 et 51", "50-51"),
-        ("Art. 50 e 51", "50-51"),
+        ("Art. 135 bis 149", "135-149"),  # German "to"
+        ("Art. 257 e", "257e"),  # Italian letter suffix, not "and"
+        ("Art. 12 bis", "12bis"),
+        # a conjunction is never turned into a range: the two numbers stay separate
+        ("Art. 50 und 51", "50,51"),
+        ("Art. 50 et 51", "50,51"),
+        ("Art. 50 e 51", "50,51"),
+        ("Art. 50 und 52", "50,52"),
         ("Art. 28d à 28f", "28d-28f"),
         ("Art. 2 4", "2-4"),
         ("", ""),
@@ -54,6 +61,34 @@ from fedlex_bench.ingest import (
 )
 def test_normalize_article_number(raw: str, expected: str) -> None:
     assert normalize_article_number(raw) == expected
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("Art. 50 und 51", ["50", "51"]),
+        ("Art. 50 und 52", ["50", "52"]),  # not adjacent: must not become 50-52
+        ("Art. 50 et 52", ["50", "52"]),
+        ("Art. 50 e 52", ["50", "52"]),
+        ("Art. 663a und 663b", ["663a", "663b"]),
+        ("Art. 697l et 697m", ["697l", "697m"]),
+        ("Art. 135 à 149", ["135-149"]),  # a range stays one id
+        ("Art. 28d a 28f", ["28d-28f"]),
+        ("Art. 135–149", ["135-149"]),
+        ("Art. 50 und 51 bis 55", ["50", "51-55"]),  # conjunction and range together
+        ("Art. 257 e", ["257e"]),  # "e" before nothing is a suffix
+        ("Art. 12 bis", ["12bis"]),
+        ("Art. 257 d", ["257d"]),
+        ("Art. 1", ["1"]),
+        ("", []),
+    ],
+)
+def test_normalize_article_numbers_splits_conjunctions(raw: str, expected: list[str]) -> None:
+    assert normalize_article_numbers(raw) == expected
+
+
+def test_conjunction_is_never_a_range() -> None:
+    assert "-" not in normalize_article_number("Art. 50 und 52")
 
 
 @pytest.mark.parametrize(
@@ -192,9 +227,78 @@ def test_unarticled_transitional_units_are_reported_and_chunked() -> None:
     assert block.block_heading == block.title and not block.is_repealed
 
 
-def test_parse_accepts_str_and_ignores_external_entities() -> None:
+def test_parse_accepts_str() -> None:
     xml = wrap(ART_10_REPEALED + ART_PARTIAL_REPEAL).decode("utf-8")
     assert [a.number for a in parse_akn(xml)] == ["10", "56"]
+
+
+def _doc_with_entity(entity_decl: str, body_ref: str) -> bytes:
+    """An act whose single article contains ``body_ref`` and whose DOCTYPE declares an entity."""
+    art = (
+        '<article eId="art_1"><num>Art. 1</num><paragraph eId="art_1/para">'
+        f"<content><p>Vor {body_ref} nach</p></content></paragraph></article>"
+    )
+    doc = wrap(art).decode("utf-8")
+    return f"<!DOCTYPE akomaNtoso [{entity_decl}]>{doc}".encode()
+
+
+def test_external_system_entity_is_not_expanded(tmp_path) -> None:
+    secret = tmp_path / "secret.txt"
+    secret.write_text("TOP-SECRET-CONTENT", encoding="utf-8")
+    decl = f'<!ENTITY xxe SYSTEM "{secret.as_uri()}">'
+    xml = _doc_with_entity(decl, "&xxe;")
+    for source in (xml, xml.decode("utf-8")):  # bytes and str
+        (a,) = parse_akn(source)
+        assert "TOP-SECRET-CONTENT" not in a.text
+        assert "TOP-SECRET-CONTENT" not in a.footnotes
+        assert a.text == "Vor nach"  # parsing still works
+
+
+def test_internal_entity_is_not_expanded_either() -> None:
+    xml = _doc_with_entity('<!ENTITY inner "EXPANDED-VALUE">', "&inner;")
+    (a,) = parse_akn(xml)
+    assert "EXPANDED-VALUE" not in a.text
+
+
+def test_validate_akn_does_not_resolve_external_entities(tmp_path) -> None:
+    secret = tmp_path / "secret.txt"
+    secret.write_text("TOP-SECRET-CONTENT", encoding="utf-8")
+    xml = _doc_with_entity(f'<!ENTITY xxe SYSTEM "{secret.as_uri()}">', "&xxe;")
+    ingest.validate_akn(xml)  # parses without touching the file or the network
+
+
+def _fallback_article(eid: str, num: str) -> str:
+    return (
+        f'<article eId="{eid}"><num>{num}</num>'
+        '<paragraph><content><p>Aufgehoben.</p></content></paragraph>'
+        '<paragraph><content><p>Text bleibt.</p></content></paragraph></article>'
+    )
+
+
+def test_conjunction_citation_without_art_eid_becomes_separate_chunks() -> None:
+    # No "art_" eId to take the number from: the printed "Art. 50 und 52" is the only source.
+    arts = parse_akn(wrap(_fallback_article("lvl_x", "Art. 50 und 52")))
+    assert [a.number for a in arts] == ["50", "52"]  # not one range "50-52"
+    assert arts[0].text == arts[1].text and arts[0].text != ""
+    assert [a.displayed_number for a in arts] == ["50,52", "50,52"]
+    assert len({a.eid for a in arts}) == 1
+
+
+def test_conjunction_citation_inside_transitional_block_keeps_block_prefix() -> None:
+    xml = (
+        '<transitional eId="disp_u3"><heading>Uebergang</heading>'
+        + _fallback_article("disp_u3/x_1", "Art. 31 et 32")
+        + "</transitional>"
+    )
+    assert [a.number for a in parse_akn(wrap(xml))] == ["u3/31", "u3/32"]
+
+
+def test_eid_based_number_is_unchanged_by_conjunction_in_num() -> None:
+    # The eId is Fedlex's structural id (identical in DE/FR/IT while the printed number varies:
+    # DE "Art. 463–464", FR "Art. 463 et 464"), so it stays the id and is not split.
+    (a,) = parse_akn(wrap(_fallback_article("art_50_51", "Art. 50 und 51")))
+    assert a.number == "50-51"
+    assert a.displayed_number == "50,51"
 
 
 def test_transitional_only_document() -> None:
