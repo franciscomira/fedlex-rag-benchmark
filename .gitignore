@@ -9,3 +9,4 @@ data/raw/*
 *.parquet
 models/
 eval/cache/
+benchmark/plan/briefs/
