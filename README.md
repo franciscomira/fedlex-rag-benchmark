@@ -36,4 +36,12 @@ docs/              plan and write-up
 
 ## Licence
 
-Code: TBD. Data: see source licences (Fedlex terms, dataset licences), to be confirmed in Phase 0.
+Code: TBD.
+
+Data: the statute texts come from Fedlex (Swiss Federal Chancellery) open data via the SPARQL endpoint and filestore. Fedlex permits reuse for commercial and non-commercial purposes under the conditions of Art. 49 para. 1 of the Publikationsverordnung (SR 170.512.1), as described at <https://www.fedlex.admin.ch/de/broadcasters> and <https://fedlex.data.admin.ch/de-CH/home/intro>. Key conditions: the content must not be altered, it must be visibly distinct from any commentary, and it must not suggest an official publication.
+
+**This is not an official publication. Only the publication by the Federal Chancellery is authoritative.** (German original: "Dies ist keine amtliche Veröffentlichung. Massgebend ist allein die Veröffentlichung durch die Bundeskanzlei.")
+
+Processing notes: footnotes are dropped from chunk text, and article ids and chunk boundaries are derived by this project. Raw Fedlex files and the processed Parquet are not committed to this repository.
+
+The Swiss Case Law Open Dataset on Hugging Face (CC0) was checked and contains court decisions only, so it is not used for statutes.
