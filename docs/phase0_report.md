@@ -2,7 +2,7 @@
 
 Date: 2026-10-15. Scope: eight acts in German, French and Italian. The three acts from the kickoff (SR 220 Code of Obligations, SR 210 Civil Code, SR 235.1 Data Protection Act) are the alignment check; five related acts were added afterwards to form the corpus slice (section 2).
 
-**Recommendation: GO**, with the adjustments listed at the end. Id alignment is 100% (stop threshold was 95%), the pipeline is deterministic, and 262 tests pass (120 from the original pipeline, 142 added for id resolution and eligibility). The 100% figure is largely structural, so the content-level checks below matter more than the headline number.
+**Recommendation: GO**, with the adjustments listed at the end. Id alignment is 100% (stop threshold was 95%), the pipeline is deterministic, and 338 tests pass (120 from the original pipeline, 218 added for id resolution, eligibility, entity handling and report-input checks). The 100% figure is largely structural, so the content-level checks below matter more than the headline number.
 
 ## 1. Data source and licence
 
@@ -84,13 +84,15 @@ In-force chunks only: 3,844 of 3,844. No id is missing in any language.
   - Side finding from the same check: the literal string `[tab]` appears in the raw Fedlex XML itself (`272:250` DE and FR, `281.1:219` IT; 3 chunks in total). It is a source artefact that our text keeps.
 - Length ratio above 1.6 (longest over shortest of DE/FR/IT, in-force, longest over 200 chars): 10 of 3,844 (six in SR 281.1, plus `220:1075`, `220:644`, `210:336`, `210:339`). They look like ordinary translation differences but have not been read pair by pair.
 - Parser fix found while adding the new acts: IT `221.229.1:48-49` has no body and a footnote that says only "Introdotto dal ...", not "Abrogato". It was first flagged in force in IT but repealed in DE and FR. The data smoke test caught the flag mismatch. Any article with no body text is now treated as repealed, with a test.
+- Printed number of a range versus a conjunction (second review). Fedlex gives `Art. 50 und 51` and `Art. 135 bis 149` the same kind of eId (`art_50_51`, `art_135_149`), and the three languages print the same eId differently (DE `Art. 463–464`, FR `Art. 463 et 464`, IT `Art. 463 e 464`; IT prints `Art. 697l` alone for `697l-697m`). The id therefore comes from the eId and stays one chunk, such as `210:50-51`; this is deliberate, because splitting by the printed text would give DE, FR and IT different ids for the same eId. All 21 chunks whose printed number is a conjunction in at least one language are adjacent pairs (for example 50 and 51, 663a and 663b), so a range and a conjunction cover the same articles there. What did change in `ingest.py`: the number normaliser no longer turns `und`, `et` and `e` into a range. `normalize_article_numbers("Art. 50 und 52")` gives `["50", "52"]`, never `50-52` (which would claim 51), and an article without an `art_` eId whose printed number is a conjunction becomes one chunk per cited article. The corpus has no such article, so the parquet did not change (the sha256 in section 5 is identical before and after). In the eId check, a printed `50,51` compares equal to the eId-derived `50-51`.
 - Five random aligned articles (seed 42) printed side by side read as correct translations. They are in `docs/phase0_alignment.txt`.
 
 Full output is in [phase0_alignment.txt](phase0_alignment.txt). Regenerate with `uv run python -m fedlex_bench.chunk` and `uv run python -m fedlex_bench.alignment`.
 
 ## 5. Reproducibility
 
-- Re-running the chunker gives a byte-identical Parquet (sha256 `e6a8ddac5bcabe3b5eb3600b05fc18e1370af3f03310de8ce10c925f3646b75c`).
+- Re-running the chunker gives a byte-identical Parquet (sha256 `e6a8ddac5bcabe3b5eb3600b05fc18e1370af3f03310de8ce10c925f3646b75c`). A test rebuilds it from the raw files with the acts and languages passed in reverse order and with the rows shuffled (two seeds) and sorted again, and checks that all four hashes are equal and equal to the file on disk. It is skipped when `data/raw` is missing. The hash did not change when the ingest code was edited for the second review.
+- `fedlex_bench.alignment` reports only on the acts in the parquet, and refuses to run (exit code 2) unless the parquet belongs to the manifest: every `source_url` must start with the manifest URL, the consolidation date must agree, the raw file must exist, and its sha256 must equal the manifest value (checked before the raw XML is parsed again).
 - The discovery manifest `data/manifest.json` is tracked in git and holds the source URLs, consolidation dates and a sha256 per raw file. Raw files are verified against it on load. Raw file names include the filestore revision.
 - The as-of date is fixed, so results do not drift with the day the pipeline runs.
 - Caveat: the recorded hashes come from the first download. They prove the files have not changed since, not that they match Fedlex's current content. A spot check on 2026-10-15 re-fetched the five German filestore files used in the link check (SR 220, 210, 221.229.1, 272, 281.1, section 7): all five served bytes match the manifest sha256. The other 19 files were not re-fetched. A fresh clone with no `data/raw` re-downloads whatever the filestore serves for the pinned URLs.
@@ -99,43 +101,76 @@ Full output is in [phase0_alignment.txt](phase0_alignment.txt). Regenerate with 
 ## 6. Known issues
 
 1. **Footnotes** (resolved). They were first dropped from the text, which could conflict with the "no alteration" condition. They are now kept in a separate `footnotes` column (1,665 DE, 1,694 FR and 1,660 IT chunks have one). Whether a footnote exists differs between languages for 97 aligned ids, which looks like language-specific editorial notes, not parsing errors. Notes can be long (up to about 4,900 characters), so do not embed them with the text without checking retrieval quality.
-2. **Range ids** (resolved). Repealed ranges such as `210:135-149` are one chunk (42 range ids per language, all repealed, all without text). A lookup of `210:140` used to find nothing. `fedlex_bench.ids` now parses ids, defines how suffixed numbers sort, and resolves `210:140` to `210:135-149` with `resolve_id(id, known_ids)` (or `IdResolver` for many lookups). Ids that cannot be resolved return `None`; an id covered by two ranges is ambiguous and also returns `None`. Retrieval itself was never affected, because range chunks have no text. The ordering rules are in the module docstring, and a corpus-level test checks every range id in the corpus.
+2. **Range ids** (resolved). Repealed ranges such as `210:135-149` are one chunk (42 range ids per language, all repealed, all without text). A lookup of `210:140` used to find nothing. `fedlex_bench.ids` now parses ids, defines how suffixed numbers sort, and resolves `210:140` to `210:135-149` with `resolve_id(id, known_ids)` (or `IdResolver` for many lookups). The number grammar is strict: digits, then at most one letter and/or one Latin ordinal (`257d`, `6bis`, `6abis`, `12ater`); `135ff` or `140xyz` are malformed. All 2,163 distinct numbers in the corpus parse. A range covers only what it names: `135-149` covers the integers 135 to 149, not `140a`, `140z` or `140bis` (the repealed block does not say whether an inserted 140a belongs to it, so such an id resolves to `None`); `226a-226d` covers the letters a to d; `274-274g` covers 274 and 274a to 274g. Unresolvable ids return `None`, and an id covered by two ranges is ambiguous and also returns `None`. Passing one string instead of a list of known ids is a `TypeError`. Retrieval itself was never affected, because range chunks have no text. A corpus-level test checks every range id (every member resolves to it, no member is a chunk of its own, no other chunk lies anywhere in the natural-order span of a range). **Resolving is not the same as being usable as gold**, see section 9.
 3. **Transitional ids are positional.** `uN` is the ordinal of the `disp_` block in the snapshot. A new block shifts later ids, so gold labels that cite transitional provisions are only valid for this snapshot. Prefer main-text articles for benchmark questions. The `block_heading` column gives context.
 4. **Annexes not chunked.** SR 235.1 annexes 1 and 2 (about 50 to 300 characters each per language) are left out.
 5. **Unreviewed translation differences.** Of the five structural mismatches in section 4, `221.229.1:95c` and `281.1:219` were traced to the raw XML (a duplicated source element and a markup difference). The other three rest on the earlier reviewer check. The ten length outliers have not been read pair by pair, and nobody who knows Swiss law has reviewed any of them.
 6. **Source URL deep links** (checked, with a caveat). `source_url` is the filestore XML URL plus `#<eId>`. It links to the raw XML file, not to the readable page. See section 7 for the check and the recommendation.
-7. **Marginal titles.** 6 (SR 210), 20 to 21 (SR 220) and 2 (SR 235.1) in-force chunks have an empty title.
+7. **Marginal titles.** In-force chunks with an empty title, the same in DE, FR and IT: 6 (SR 210), 20 (SR 220), 2 (SR 221.214.1), 0 (SR 221.229.1), 2 (SR 235.1), 1 (SR 241), 23 (SR 272) and 2 (SR 281.1), 56 per language in total. The count includes in-force transitional chunks. (An earlier draft gave only three of the acts and "20 to 21" for SR 220.)
+8. **Transitional and final provisions in the main text.** The chunker marks only `disp_` blocks as transitional. Several acts put their own transitional, repeal and entry-into-force articles into the main text, under a "Schlussbestimmungen" part. They are in force and stay retrievable, but they are taken out of the benchmark pool by a hand-reviewed list (section 7).
+9. **Duplicated item and `[tab]` in the source.** See section 4: `221.229.1:95c` (IT) repeats one item, and three chunks contain a literal `[tab]`. Both come from Fedlex's XML and are kept unchanged.
 
 ## 7. Link check and eligibility helper
 
-**Link check (2026-10-15).** Five in-force main-text articles were picked with `random.Random(42)`: one from SR 220 and one each from four other acts chosen at random: `220:321`, `210:480`, `221.229.1:28`, `272:55`, `281.1:143a`. All requests were read-only GETs and nothing was saved to the repo.
+**Link check (2026-10-15).** Five in-force main-text articles, one from SR 220 and one each from four other acts: `220:321`, `210:480`, `221.229.1:28`, `272:55`, `281.1:143a`. They were picked ad hoc with a throwaway script that is not kept in the repo, so the selection cannot be reproduced from the repo and a sample of five says nothing about the other articles. All requests were read-only GETs and nothing was saved to the repo.
 
 - The `source_url` base (filestore XML) returned 200 with `application/xml` for all five (German). The served bytes match the manifest sha256, and each file contains an `<article>` with the expected eId (`art_321`, `art_480`, `art_28`, `art_55`, `art_143_a`).
 - The fragment does not help there. The URL returns plain XML, and `eId` is an ordinary attribute, not `xml:id`, so a viewer has nothing to jump to. Verdict: the link works as a **provenance link to the source file**, but it is not a human-readable deep link.
 - The readable page is `https://www.fedlex.admin.ch/eli/<eli path>/<lang>`, for example `https://www.fedlex.admin.ch/eli/cc/27/317_321_377/de#art_321`. Plain HTTP returns 200 for it, but the body is the same 77,119-byte JavaScript shell for every act, so HTTP alone proves nothing about the fragment. I opened all five pages in the built-in browser: the rendered page has an element whose `id` equals the eId (for example `<article id="art_321">`) with the article text, so the eId is a valid fragment target. But the page did not scroll to it in my test (scroll position stayed at 0 after the content had loaded), so a reader lands at the top of the act. I did not test the FR and IT pages, and I did not verify that the readable page shows the same consolidation as our snapshot (the URL without a date shows the current one).
 - Recommendation, not implemented because `chunk.py` is out of scope for this change: add a second field with the `fedlex.admin.ch` page URL plus eId for display, and keep the filestore URL as provenance. In the UI, cite the article by SR number and article number, not by link alone.
 
-**Eligibility helper.** `fedlex_bench.eligibility` defines which chunks may be retrieved and which articles may anchor a question. Retrieval-eligible means `kind == "article"`, not repealed, not historical, non-empty text. That gives 3,663 chunks per language, identical in DE, FR and IT (the 3,844 in-force chunks minus 181 in-force transitional or final provisions). Benchmark-eligible means retrieval-eligible in all three languages and at least `min_chars` characters in every language (default 200, a judgement call, not tuned). The pool is defined once on article ids, so it is identical across languages by construction, and `eligibility_mismatches` lists any id that is eligible in only some languages (currently none). Run `uv run python -m fedlex_bench.eligibility` for the counts.
+**Eligibility helper.** `fedlex_bench.eligibility` defines which chunks may be retrieved and which articles may anchor a question. Retrieval-eligible means `kind == "article"`, not repealed, not historical, non-empty text. That gives 3,663 chunks per language, identical in DE, FR and IT (the 3,844 in-force chunks minus 181 in-force transitional or final provisions). Benchmark-eligible means retrieval-eligible in all three languages, at least `min_chars` characters in every language (default 200, a judgement call, not tuned), and not on `TRANSITIONAL_IN_BODY`, a hand-reviewed list of 30 transitional, final and repeal provisions that sit in the main text (below). The pool is defined once on article ids, so it is identical across languages by construction, `pool_rows` raises if a pool id has no eligible row in a language, and `eligibility_mismatches` lists any id that is eligible in only some languages (currently none). Run `uv run python -m fedlex_bench.eligibility` for the counts.
 
-Pool size (articles per act, the same in each language):
+Pool size (articles per act, the same in each language; the three right-hand columns apply the length rule and the exclusion list):
 
 | SR | Retrieval-eligible | min 100 chars | min 200 chars | min 300 chars |
 | --- | --- | --- | --- | --- |
 | 210 | 1,065 | 1,016 | 822 | 582 |
 | 220 | 1,526 | 1,478 | 1,243 | 960 |
-| 221.214.1 | 46 | 43 | 34 | 29 |
-| 221.229.1 | 98 | 97 | 87 | 74 |
-| 235.1 | 77 | 73 | 65 | 52 |
-| 241 | 30 | 29 | 20 | 15 |
-| 272 | 427 | 389 | 301 | 217 |
-| 281.1 | 394 | 377 | 305 | 233 |
-| **Total** | **3,663** | **3,502** | **2,877** | **2,162** |
+| 221.214.1 | 46 | 42 | 34 | 29 |
+| 221.229.1 | 98 | 94 | 85 | 74 |
+| 235.1 | 77 | 68 | 61 | 50 |
+| 241 | 30 | 28 | 20 | 15 |
+| 272 | 427 | 378 | 296 | 213 |
+| 281.1 | 394 | 375 | 304 | 232 |
+| **Total** | **3,663** | **3,479** | **2,865** | **2,155** |
 
-At the default, 786 of the 3,663 retrieval-eligible articles (about a fifth) drop out. The small acts lose the most in relative terms: SR 241 keeps 20 of 30.
+At the default, 798 of the 3,663 retrieval-eligible articles (about a fifth) drop out, 12 of them through the exclusion list. The small acts lose the most in relative terms: SR 241 keeps 20 of 30 and SR 235.1 keeps 61 of 77. The first version of this table (3,502 / 2,877 / 2,162) had no exclusion list; a test now pins the full table.
+
+**Excluded as transitional or final provisions in the main text.** `TRANSITIONAL_IN_BODY` was built by listing, in the raw XML, every main-text article that sits under a part, chapter, section or title called "Schlussbestimmungen" / "Dispositions finales" / "Disposizioni finali" or "Uebergangsbestimmung(en)" (DE, FR and IT headings agree), and then reading each one. The 12 that would otherwise be in the pool at 200 characters (title in German, shortest language in characters):
+
+| Id | Title | Chars |
+| --- | --- | --- |
+| 221.229.1:103a | Uebergangsbestimmung zur Aenderung vom 19. Juni 2020 | 223 |
+| 221.229.1:104 | Inkrafttreten des Gesetzes | 266 |
+| 235.1:69 | Uebergangsbestimmungen betreffend laufende Bearbeitungen | 205 |
+| 235.1:70 | Uebergangsbestimmung betreffend laufende Verfahren | 248 |
+| 235.1:71 | Uebergangsbestimmung betreffend Daten juristischer Personen | 542 |
+| 235.1:72 | Uebergangsbestimmung betreffend die Wahl und die Beendigung der Amtsdauer | 365 |
+| 272:404 | Weitergelten des bisherigen Rechts | 288 |
+| 272:407 | Schiedsgerichtsbarkeit | 571 |
+| 272:407b | (no title; transitional provision for the amendment of 20 March 2015) | 430 |
+| 272:407c | (no title; amendment of 19 June 2015) | 434 |
+| 272:407f | (no title; amendment of 17 March 2023) | 477 |
+| 281.1:351 | Inkrafttreten | 370 |
+
+The list has 18 more ids that are below the length limit today (for example 235.1:68, 235.1:73, 235.1:74, 241:28, 241:29, 272:402, 272:403, 272:408, 281.1:352), so it does not depend on `min_chars`. It is deliberately conservative. Not excluded although they sit under "Schlussbestimmungen": `221.229.1:100` and `:101` (relation to the Code of Obligations, excluded legal relationships), `272:400`, `:401` and `:401a` (implementing rules, pilot projects, statistics), and `220:406e`, whose title contains the word "Inkrafttreten" but which is an ordinary contract rule. A test fails if a pool article has a title in any language that starts like a transitional or entry-into-force provision and is neither listed nor reviewed as ordinary. The list belongs to this snapshot. No reviewer who knows Swiss law has checked it.
 
 ## 8. Review process
 
-The code was reviewed by a read-only reviewer agent, working from the eval-reviewer role (the project agent was not registered at the time, so a general-purpose agent got its rules inline). It reported 16 findings, including two high-severity ones: 222 superseded SR 210 rows counted as in force, and a manifest ignored by git. All were fixed; the range lookup was fixed afterwards in `ids.py`. The original fixes were verified by re-running tests (120 passed at that time), ruff and the chunker. The fixed code, `ids.py` and `eligibility.py` have not had an independent review.
+The code was reviewed by a read-only reviewer agent, working from the eval-reviewer role (the project agent was not registered at the time, so a general-purpose agent got its rules inline). It reported 16 findings, including two high-severity ones: 222 superseded SR 210 rows counted as in force, and a manifest ignored by git. All were fixed; the range lookup was fixed afterwards in `ids.py`. The original fixes were verified by re-running tests (120 passed at that time), ruff and the chunker.
+
+A second independent review of `ids.py`, `eligibility.py`, the report and the surrounding code followed. Its findings and what was done:
+
+- Resolving an id was treated as enough to use it as gold: `resolve_gold` now also requires pool membership (section 9).
+- The id grammar accepted any letters after the digits: it is now strict (section 6, issue 2), and integer ranges no longer claim suffixed numbers such as `140z`.
+- The alignment script reported on every act of the manifest and did not check that the parquet matched it: it now reports on the acts in the parquet and verifies URLs, consolidation date and raw sha256 first.
+- Stale empty-title counts, a pool that contained transitional provisions from the main text, an unreproducible sample claim and an unpinned pool table: fixed in sections 6 and 7, and the table is pinned by a test.
+- The external-entity test did not test anything. A real test showed that a document with an entity reference crashed the parser (the article text was serialised and parsed a second time). It now copies the element, entities are not expanded, and the test checks that.
+- A printed conjunction was normalised to a range: fixed (section 4).
+- Smaller test and robustness points: a corpus test that rebuilds from shuffled input and compares the parquet hash, `pool_rows` checking its output, a bare string as known ids rejected, numpy integers accepted as `min_chars`, and the range test asserting that no range member is a chunk of its own and that no chunk lies inside the order span of a range.
+
+The fixes of this second round have not had a third independent review.
 
 ## 9. Recommendation: GO, with adjustments
 
@@ -145,6 +180,6 @@ Adjustments before Phase 1:
 
 - **Corpus slice.** Decided: keep all eight acts (section 2). The plan targeted the Code of Obligations plus 3 to 5 related acts, so this is wider than planned: seven neighbouring acts. They give 3,844 in-force chunks per language (11,532 across the three languages), of which 3,663 are main-text articles. The pipeline takes new SR numbers as input (`--acts`), so changing the slice is cheap.
 - **Exclude** `is_historical`, `is_repealed` and transitional chunks from the retrieval index: use `retrieval_eligible` in `fedlex_bench.eligibility`.
-- **Benchmark questions** should take their gold articles from `benchmark_eligible` (main-text articles in force, with at least 200 characters in all three languages), and resolve any cited id through `fedlex_bench.ids.resolve_id`.
+- **Benchmark questions** should take their gold articles from `benchmark_eligible` (main-text articles in force, at least 200 characters in all three languages, not a listed transitional or final provision). A cited id must go through **both steps, in one call**: `fedlex_bench.eligibility.resolve_gold(id, pool_ids, known_ids)` resolves it (normalisation, ranges) and returns it only if the result is in `benchmark_eligible(df)["article_id"]`. `resolve_id` alone is not enough: `210:140` resolves to the repealed range chunk `210:135-149`, and repealed, too short, transitional or listed articles also resolve, but none of them may be a gold label. Pass all chunk ids as `known_ids` so that ranges are found.
 - **Add the non-official notice** wherever texts are displayed (demo, results page).
 - **Closed since the first draft:** code licence (MIT), footnotes (separate column), and the SCALE / JuRAG reading ([related_work.md](related_work.md)). The SCALE results section was not read, so quote no SCALE numbers until it is.
