@@ -1,0 +1,178 @@
+PHASE 0 ALIGNMENT REPORT (DE/FR/IT)
+========================================================================
+Source: Fedlex SPARQL endpoint + filestore, Akoma Ntoso XML; one chunk per <article>.
+SR 210: consolidation 2026-07-01 (applicable 2026-07-01 .. open; as_of 2026-10-15)  https://fedlex.data.admin.ch/eli/cc/24/233_245_233/20260701
+SR 220: consolidation 2026-10-01 (applicable 2026-10-01 .. 2027-06-30; as_of 2026-10-15)  https://fedlex.data.admin.ch/eli/cc/27/317_321_377/20261001
+SR 235.1: consolidation 2025-07-07 (applicable 2025-07-07 .. open; as_of 2026-10-15)  https://fedlex.data.admin.ch/eli/cc/2022/491/20250707
+
+1. COUNTS PER ACT AND LANGUAGE
+------------------------------------------------------------------------
+SR      lang    chunks    body  transit.  repealed  in force
+210     de        1277    1099       178        39      1238
+210     fr        1277    1099       178        39      1238
+210     it        1277    1099       178        39      1238
+220     de        1685    1602        83        91      1594
+220     fr        1685    1602        83        91      1594
+220     it        1685    1602        83        87      1598
+235.1   de          77      77         0         0        77
+235.1   fr          77      77         0         0        77
+235.1   it          77      77         0         0        77
+(body = main-text articles; transit. = Schluss-/Übergangsbestimmungen articles;
+ repealed = no text in force: aufgehoben/abrogé/abrogato, gegenstandslos, or '…')
+
+2. ALIGNMENT (article_id present in all 3 languages / union of ids)
+------------------------------------------------------------------------
+SR        aligned   union     rate
+210          1277    1277  100.00%
+220          1685    1685  100.00%
+235.1          77      77  100.00%
+ALL          3039    3039  100.00%
+Threshold 95%: PASS
+Same rate restricted to in-force (non-repealed) chunks: 2909/2913 = 99.86%
+Content sanity check: aligned in-force ids with DE/FR/IT text-length ratio > 2.5 (longest text > 200 chars): 0
+
+3. MISSING IDS PER LANGUAGE
+------------------------------------------------------------------------
+None: every article_id exists in DE, FR and IT for every act.
+
+4. IDS ALIGNED BUT is_repealed DIFFERS BETWEEN LANGUAGES
+------------------------------------------------------------------------
+220:u12/2-4: de=repealed/elided, fr=repealed/elided, it=text
+220:u17/7: de=repealed/elided, fr=repealed/elided, it=text
+220:u2/1: de=repealed/elided, fr=repealed/elided, it=text
+220:u2/2: de=repealed/elided, fr=repealed/elided, it=text
+
+5. TRANSITIONAL / FINAL-PROVISION BLOCKS WITHOUT <article> (not chunked)
+------------------------------------------------------------------------
+SR 220 de: disp_u1 | Übergangsbestimmungen des Bundesgesetzes vom 30. März 1911
+SR 220 de: disp_u4 | Übergangsbestimmung zur Änderung vom 17. Juni 2011
+SR 220 de: disp_u11 | Übergangsbestimmung zur Änderung vom 19. Juni 2020
+SR 220 de: disp_u15 | Übergangsbestimmungen zum XX. Titel
+SR 220 de: disp_u18 | Schlussbestimmungen zum zweiten Abschnitt des XXXIV. Titels
+SR 220 fr: disp_u1 | Dispositions transitoires de la loi fédérale du 30 mars 1911
+SR 220 fr: disp_u4 | Disposition transitoire de la modification du 17 juin 2011
+SR 220 fr: disp_u11 | Disposition transitoire de la modification du 19 juin 2020
+SR 220 fr: disp_u15 | Dispositions transitoires du titre vingtième
+SR 220 fr: disp_u18 | Dispositions finales du chapitre II du titre trente‑quatrième
+SR 220 it: disp_u1 | Disposizioni transitorie della legge federale del 30 marzo 1911
+SR 220 it: disp_u4 | Disposizione transitoria della modifica del 17 giugno 2011
+SR 220 it: disp_u11 | Disposizione transitoria della modifica del 19 giugno 2020
+SR 220 it: disp_u15 | Disposizioni transitorie del titolo XX
+SR 220 it: disp_u18 | Disposizioni finali del capo secondo del titolo XXXIV
+
+6. ARTICLES WITHOUT MARGINAL TITLE (per language; informational)
+------------------------------------------------------------------------
+SR 210: de=6, fr=6, it=6 (in-force chunks with empty title)
+SR 220: de=20, fr=20, it=21 (in-force chunks with empty title)
+SR 235.1: de=2, fr=2, it=2 (in-force chunks with empty title)
+
+7. FIVE RANDOM ALIGNED IN-FORCE ARTICLES (seed=42)
+------------------------------------------------------------------------
+=== 235.1:29 ===
+--- DE | title: Einschränkungen des Rechts auf Datenherausgabe oder -übertragung
+    1 Der Verantwortliche kann die Herausgabe oder Übertragung der Personendaten aus den in Artikel 26
+    Absätze 1 und 2 aufgeführten Gründen verweigern, einschränken oder aufschieben.
+    2 Der Verantwortliche muss angeben, weshalb er die Herausgabe oder Übertragung verweigert,
+    einschränkt oder aufschiebt.
+--- FR | title: Restrictions du droit à la remise ou à la transmission des données personnelles
+    1 Le responsable du traitement peut refuser, restreindre ou différer la remise ou la transmission de
+    données personnelles pour les mêmes motifs que ceux prévus à l’art. 26, al. 1 et 2.
+    2 Le responsable du traitement indique le motif pour lequel il refuse, restreint ou diffère la
+    remise ou la transmission des données personnelles.
+--- IT | title: Restrizioni del diritto di farsi consegnare dati o di esigerne la trasmissione a terzi
+    1 Il titolare del trattamento può rifiutare, limitare o differire la consegna o la trasmissione dei
+    dati personali per i motivi di cui all’articolo 26 capoversi 1 e 2.
+    2 Il titolare del trattamento indica il motivo per cui rifiuta, limita o differisce la consegna o la
+    trasmissione.
+
+=== 210:412 ===
+--- DE | title: Besondere Geschäfte
+    1 Der Beistand oder die Beiständin darf in Vertretung der betroffenen Person keine Bürgschaften
+    eingehen, keine Stiftungen errichten und keine Schenkungen vornehmen, mit Ausnahme der üblichen
+    Gelegenheitsgeschenke.
+    2 Vermögenswerte, die für die betroffene Person oder für ihre Familie einen besonderen Wert haben,
+    werden wenn immer möglich nicht veräussert.
+--- FR | title: Affaires particulières
+    1 Le curateur ne peut, au nom de la personne concernée, procéder à des cautionnements ni créer des
+    fondations ou effectuer des donations, à l’exception des présents d’usage.
+    2 Dans la mesure du possible, il s’abstient d’aliéner tout bien qui revêt une valeur particulière
+    pour la personne concernée ou pour sa famille.
+--- IT | title: Negozi particolari
+    1 In rappresentanza dell’interessato, il curatore non può contrarre fideiussioni, costituire
+    fondazioni né fare donazioni, fatti salvi i regali d’uso.
+    2 Gli elementi del patrimonio che hanno un valore particolare per l’interessato o la sua famiglia
+    non possono, per quanto possibile, essere alienati.
+
+=== 210:83b ===
+--- DE | title: Revisionspflicht und anwendbares Recht
+    1 Das oberste Stiftungsorgan bezeichnet eine Revisionsstelle.
+    2 Die Aufsichtsbehörde kann eine Stiftung von der Pflicht befreien, eine Revisionsstelle zu
+    bezeichnen. Der Bundesrat legt die Voraussetzungen der Befreiung fest.
+    3 Soweit für Stiftungen keine besonderen Vorschriften bestehen, sind die Vorschriften des
+    Obligationenrechts über die Revisionsstelle bei Aktiengesellschaften entsprechend anwendbar.
+    4 Ist die Stiftung zu einer eingeschränkten Revision verpflichtet, so kann die Aufsichtsbehörde eine
+    ordentliche Revision verlangen, wenn dies für die zuverlässige Beurteilung der Vermögens- und
+    Ertragslage der Stiftung notwendig ist.
+--- FR | title: Obligation de révision et droit applicable
+    1 L’organe suprême de la fondation désigne un organe de révision.
+    2 L’autorité de surveillance peut dispenser la fondation de l’obligation de désigner un organe de
+    révision. Le Conseil fédéral définit les conditions de la dispense.
+    3 À défaut de dispositions spéciales applicables aux fondations, les dispositions du code des
+    obligations concernant l’organe de révision de la société anonyme sont applicables par analogie.
+    4 Lorsque la fondation est tenue à un contrôle restreint, l’autorité de surveillance peut exiger un
+    contrôle ordinaire, si cela est nécessaire pour révéler l’état du patrimoine et les résultats de la
+    fondation.
+--- IT | title: Obbligo di revisione e diritto applicabile
+    1 L’organo superiore della fondazione designa un ufficio di revisione.
+    2 L’autorità di vigilanza può liberare la fondazione dall’obbligo di designare un ufficio di
+    revisione. Il Consiglio federale ne definisce le condizioni.
+    3 Salvo disposizioni particolari vigenti per le fondazioni, si applicano per analogia le
+    disposizioni del Codice delle obbligazioni sull’ufficio di revisione nell’ambito della società
+    anonima.
+    4 Se la fondazione è tenuta a far effettuare una revisione limitata, l’autorità di vigilanza può
+    imporle di procedere a una revisione ordinaria se necessario per valutarne affidabilmente la
+    situazione patrimoniale e reddituale.
+
+=== 220:56 ===
+--- DE | title: Ersatzpflicht
+    1 Für den von einem Tier angerichteten Schaden haftet, wer dasselbe hält, wenn er nicht nachweist,
+    dass er alle nach den Umständen gebotene Sorgfalt in der Verwahrung und Beaufsichtigung angewendet
+    habe, oder dass der Schaden auch bei Anwendung dieser Sorgfalt eingetreten wäre.
+    2 Vorbehalten bleibt ihm der Rückgriff, wenn das Tier von einem andern oder durch das Tier eines
+    andern gereizt worden ist.
+    3 …
+--- FR | title: Dommages-intérêts
+    1 En cas de dommage causé par un animal, la personne qui le détient est responsable, si elle ne
+    prouve qu’elle l’a gardé et surveillé avec toute l’attention commandée par les circonstances ou que
+    sa diligence n’eût pas empêché le dommage de se produire.
+    2 Son recours demeure réservé, si l’animal a été excité soit par un tiers, soit par un animal
+    appartenant à autrui.
+    3 …
+--- IT | title: Obbligo del risarcimento
+    1 Il detentore di un animale è responsabile del danno da esso cagionato, ove non provi d’avere
+    adoperato tutta la diligenza richiesta dalle circostanze nel custodirlo e vigilarlo, o che il danno
+    si sarebbe verificato anche usando questa diligenza.
+    2 Gli è salvo il regresso se l’animale sia stato aizzato da terza persona o dall’animale di un
+    altro.
+    3 …
+
+=== 210:929 ===
+--- DE | title: Zulässigkeit und Verjährung der Klage
+    1 Die Klage aus verbotener Eigenmacht ist nur zulässig, wenn der Besitzer sofort, nachdem ihm der
+    Eingriff und der Täter bekannt geworden sind, die Sache zurückfordert oder Beseitigung der Störung
+    verlangt.
+    2 Die Klage verjährt nach Ablauf eines Jahres; das mit der Entziehung oder Störung zu laufen
+    beginnt, auch wenn der Besitzer erst später von dem Eingriff und dem Täter Kenntnis erhalten hat.
+--- FR | title: Déchéance et prescription
+    1 Le possesseur est déchu de son action, s’il ne réclame pas la restitution de la chose ou la
+    cessation du trouble aussitôt après avoir connu le fait et l’auteur de l’atteinte portée à son
+    droit.
+    2 Son action se prescrit par un an; ce délai court dès le jour de l’usurpation ou du trouble, même
+    si le possesseur n’a connu que plus tard l’atteinte subie et l’auteur de celle-ci.
+--- IT | title: Ammissibilità e prescrizione dell’azione
+    1 Le azioni contro l’illecita violenza sono ammissibili solo quando il possessore abbia
+    immediatamente reclamato la restituzione della cosa o la cessazione della turbativa, appena
+    conosciuto l’atto di violenza e l’autore di esso.
+    2 L’azione si prescrive in un anno, il quale comincia a decorrere dalla spogliazione o dalla
+    turbativa, anche se il possessore ha avuto più tardi conoscenza del fatto e del suo autore.
+
