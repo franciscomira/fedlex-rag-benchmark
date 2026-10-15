@@ -1,0 +1,4 @@
+# Keep benchmark data byte-stable across platforms (checksums depend on it).
+benchmark/**/*.jsonl text eol=lf
+benchmark/**/SHA256SUMS text eol=lf
+benchmark/**/*.txt text eol=lf
