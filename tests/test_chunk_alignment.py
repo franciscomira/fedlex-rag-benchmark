@@ -21,6 +21,7 @@ def _pa(
     n_paragraphs: int = 1,
     n_items: int = 0,
     displayed: str | None = None,
+    footnotes: str = "",
 ) -> ParsedArticle:
     return ParsedArticle(
         number=number,
@@ -35,6 +36,7 @@ def _pa(
         displayed_number=number.rsplit("/", 1)[-1] if displayed is None else displayed,
         n_paragraphs=n_paragraphs,
         n_items=n_items,
+        footnotes=footnotes,
     )
 
 
@@ -56,6 +58,17 @@ def test_rows_have_expected_columns_and_ids() -> None:
     assert rows[0]["source_url"] == "https://x/de.xml#art_1"
     assert rows[0]["consolidation_date"] == "2026-10-01"
     assert rows[2]["is_repealed"] is True and rows[2]["text"] == ""  # kept, not dropped
+
+
+def test_footnotes_column_is_last_and_filled_for_repealed_rows() -> None:
+    assert COLS[-1] == "footnotes"
+    arts = parse_akn(wrap(ART_1 + ART_10_REPEALED + ART_257_D))
+    rows = {r["article_id"]: r for r in chunk.articles_to_rows(arts, "220", "de", "u", "d")}
+    assert rows["220:1"]["footnotes"] == "Fassung gemaess X."
+    assert "Fassung gemaess" not in rows["220:1"]["text"]
+    assert rows["220:10"]["text"] == ""
+    assert rows["220:10"]["footnotes"].startswith("Aufgehoben durch Anhang 1")
+    assert rows["220:257d"]["footnotes"] == ""
 
 
 def test_duplicate_ids_raise_instead_of_being_renamed() -> None:
@@ -266,6 +279,19 @@ def test_length_ratio_outlier_detection() -> None:
     assert alignment.length_ratio_outliers(df) == ["220:2"]
 
 
+def test_footnote_coverage_counts_per_act_and_language() -> None:
+    de = [_pa("1", footnotes="N1"), _pa("2"), _pa("3", repealed=True, footnotes="Aufgehoben")]
+    fr = [_pa("1", footnotes="N1"), _pa("2"), _pa("3", repealed=True, footnotes="Abrogé")]
+    it = [_pa("1"), _pa("2"), _pa("3", repealed=True, footnotes="Abrogato")]  # 1 lacks its note
+    df = _df({"de": de, "fr": fr, "it": it})
+    lines = alignment.footnote_coverage_lines(df)
+    assert lines[0].split() == ["SR", "de", "fr", "it", "differ"]
+    assert lines[1].split() == ["220", "2/3", "2/3", "1/3", "1"]
+    assert lines[-1].split() == ["ALL", "2/3", "2/3", "1/3", "1"]
+    legacy = df.drop(columns=["footnotes"])
+    assert "rebuild" in alignment.footnote_coverage_lines(legacy)[0]
+
+
 def _manifest_and_raw(tmp_path) -> dict:
     manifest = {
         "220": {
@@ -301,6 +327,9 @@ def test_report_states_what_id_alignment_shows_and_passes_or_fails(tmp_path) -> 
     assert "ab" * 32 in report  # raw file hashes recorded
     for section in ("5a.", "5b.", "5c.", "6b."):
         assert section in report
+
+    assert "8. FOOTNOTE COVERAGE" in report
+    assert "9. FIVE RANDOM" in report
 
     broken = _df({"de": arts, "fr": arts, "it": arts[:1]})
     assert "FAIL for 220, ALL" in alignment.build_report(broken, manifest, raw_dir=tmp_path)

@@ -2,7 +2,7 @@
 
 Date: 2026-10-15. Scope: eight acts in German, French and Italian. The three acts from the kickoff (SR 220 Code of Obligations, SR 210 Civil Code, SR 235.1 Data Protection Act) are the alignment check; five related acts were added afterwards to form the corpus slice (section 2).
 
-**Recommendation: GO**, with the adjustments listed at the end. Id alignment is 100% (stop threshold was 95%), the pipeline is deterministic, and 107 tests pass. The 100% figure is largely structural, so the content-level checks below matter more than the headline number.
+**Recommendation: GO**, with the adjustments listed at the end. Id alignment is 100% (stop threshold was 95%), the pipeline is deterministic, and 120 tests pass. The 100% figure is largely structural, so the content-level checks below matter more than the headline number.
 
 ## 1. Data source and licence
 
@@ -18,7 +18,7 @@ Date: 2026-10-15. Scope: eight acts in German, French and Italian. The three act
 - it must not suggest an official publication;
 - it may only be redistributed for a fee in refined form (condition h).
 
-Consequences for this repo: the README carries the notice, and raw files and the Parquet are not committed. Chunk text drops footnotes, which could arguably count as altering content. This is documented in the README and is an open decision (see section 6). I did not find a Fedlex dataset entry on opendata.swiss that assigns one of its term categories, and the Fedlex "legal notice" page could not be read (JavaScript only). The broadcasters page is treated as the operative source.
+Consequences for this repo: the README carries the notice, and raw files and the Parquet are not committed. Footnotes are kept in a separate column so that no Fedlex content is dropped (section 6, issue 1). I did not find a Fedlex dataset entry on opendata.swiss that assigns one of its term categories, and the Fedlex "legal notice" page could not be read (JavaScript only). The broadcasters page is treated as the operative source.
 
 ## 2. Consolidations used
 
@@ -51,7 +51,7 @@ The five added acts were chosen as the statutes most often applied together with
 | 281.1 | 410 | 400 | 10 | 6 | 0 | 404 |
 | **Total per language** | **4,073** | **3,797** | **276** | **155** | **74** | **3,844** |
 
-`articles.parquet` has 12,219 rows (4,073 × 3), 11 columns: the seven required (`sr`, `article_id`, `lang`, `title`, `text`, `source_url`, `consolidation_date`) plus `kind`, `is_repealed`, `is_historical`, `block_heading`.
+`articles.parquet` has 12,219 rows (4,073 × 3), 12 columns: the seven required (`sr`, `article_id`, `lang`, `title`, `text`, `source_url`, `consolidation_date`) plus `kind`, `is_repealed`, `is_historical`, `block_heading`, `footnotes`.
 
 - *Repealed* chunks are kept with empty text and `is_repealed=True`, not dropped. The flag also covers elided ("…") and obsolete provisions.
 - *Historical* are 74 articles in SR 210 (block "Wortlaut der früheren Bestimmungen", the pre-1988 marital property text). They are flagged `is_historical=True` and should be excluded from retrieval, otherwise they compete with current law.
@@ -85,7 +85,7 @@ Full output is in [phase0_alignment.txt](phase0_alignment.txt). Regenerate with 
 
 ## 5. Reproducibility
 
-- Re-running the chunker gives a byte-identical Parquet (sha256 `9b7e404de8a86e09e66716f79a3a18141c13e68064ba58916971613aae81a491`).
+- Re-running the chunker gives a byte-identical Parquet (sha256 `e6a8ddac5bcabe3b5eb3600b05fc18e1370af3f03310de8ce10c925f3646b75c`).
 - The discovery manifest `data/manifest.json` is tracked in git and holds the source URLs, consolidation dates and a sha256 per raw file. Raw files are verified against it on load. Raw file names include the filestore revision.
 - The as-of date is fixed, so results do not drift with the day the pipeline runs.
 - Caveat: the recorded hashes come from the first download. They prove the files have not changed since, not that they match Fedlex's current content. A fresh clone with no `data/raw` re-downloads whatever the filestore serves for the pinned URLs.
@@ -93,7 +93,7 @@ Full output is in [phase0_alignment.txt](phase0_alignment.txt). Regenerate with 
 
 ## 6. Known issues
 
-1. **Footnotes dropped.** Possible conflict with the "no alteration" condition. Decide whether to keep them (as a separate column) before the repo goes public.
+1. **Footnotes** (resolved). They were first dropped from the text, which could conflict with the "no alteration" condition. They are now kept in a separate `footnotes` column (1,665 DE, 1,694 FR and 1,660 IT chunks have one). Whether a footnote exists differs between languages for 97 aligned ids, which looks like language-specific editorial notes, not parsing errors. Notes can be long (up to about 4,900 characters), so do not embed them with the text without checking retrieval quality.
 2. **Range ids.** Repealed ranges such as `210:135-149` are one chunk, so a lookup of `210:140` finds nothing. All such chunks are repealed and have no text, so retrieval is unaffected today. Citation parsing will need range expansion.
 3. **Transitional ids are positional.** `uN` is the ordinal of the `disp_` block in the snapshot. A new block shifts later ids, so gold labels that cite transitional provisions are only valid for this snapshot. Prefer main-text articles for benchmark questions. The `block_heading` column gives context.
 4. **Annexes not chunked.** SR 235.1 annexes 1 and 2 (about 50 to 300 characters each per language) are left out.
@@ -103,7 +103,7 @@ Full output is in [phase0_alignment.txt](phase0_alignment.txt). Regenerate with 
 
 ## 7. Review process
 
-The code was reviewed by a read-only reviewer agent, working from the eval-reviewer role (the project agent was not registered at the time, so a general-purpose agent got its rules inline). It reported 16 findings, including two high-severity ones: 222 superseded SR 210 rows counted as in force, and a manifest ignored by git. All were fixed except the range lookup. The fixes were verified by re-running tests (107 pass), ruff and the chunker. The fixed code has not had a second independent review.
+The code was reviewed by a read-only reviewer agent, working from the eval-reviewer role (the project agent was not registered at the time, so a general-purpose agent got its rules inline). It reported 16 findings, including two high-severity ones: 222 superseded SR 210 rows counted as in force, and a manifest ignored by git. All were fixed except the range lookup. The fixes were verified by re-running tests (120 pass), ruff and the chunker. The fixed code has not had a second independent review.
 
 ## 8. Recommendation: GO, with adjustments
 
@@ -114,5 +114,5 @@ Adjustments before Phase 1:
 - **Corpus slice.** The plan targets the Code of Obligations plus 3 to 5 related acts. The eight acts here give 3,844 in-force articles per language (11,532 chunks across the three languages). Confirm the slice before writing questions. The pipeline takes new SR numbers as input (`--acts`), so changing it is cheap.
 - **Exclude** `is_historical` and `is_repealed` chunks from the retrieval index.
 - **Benchmark questions** should cite main-text article ids only.
-- **Resolve the footnote question** (issue 1) and add the non-official notice wherever texts are displayed (demo, results page).
-- **Still open from the Phase 0 task list:** the public GitHub repo (not created, by instruction), the code licence (README still says TBD), and the SCALE / JuRAG reading list.
+- **Add the non-official notice** wherever texts are displayed (demo, results page).
+- **Closed since the first draft:** code licence (MIT), footnotes (separate column), and the SCALE / JuRAG reading ([related_work.md](related_work.md)). The SCALE results section was not read, so quote no SCALE numbers until it is.

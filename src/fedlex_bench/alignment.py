@@ -9,6 +9,9 @@ Two different questions are answered, and they must not be confused:
 2. **Content-level checks** (sections 5a-5c of the report): eId vs printed article number,
    paragraph/item counts per article across languages, and DE/FR/IT text-length ratios.
 
+Section 8 of the report is informational: how many chunks carry footnotes (``footnotes`` column)
+per act and language.
+
 The command exits non-zero when id alignment drops below 95% overall or for any act.
 
 Run: ``uv run python -m fedlex_bench.alignment``.
@@ -182,6 +185,29 @@ def side_by_side(df: pd.DataFrame, article_id: str, width: int = 100) -> str:
         out.append(f"--- {lang.upper()} | title: {r['title'] or '(none)'}")
         out.extend("    " + ln for ln in _wrap(r["text"], width))
     return "\n".join(out)
+
+
+def footnote_coverage_lines(df: pd.DataFrame) -> list[str]:
+    """Per act and language: chunks with footnotes / chunks. ``differ`` counts aligned ids where
+    having footnotes is not the same in DE, FR and IT (informational, not a failure)."""
+    if "footnotes" not in df.columns:
+        return ["(no `footnotes` column in this parquet: rebuild with fedlex_bench.chunk)"]
+    has = df.assign(has_fn=df["footnotes"] != "")
+    out = [f"{'SR':<8}" + "".join(f"{lang:>14}" for lang in LANGS) + f"{'differ':>9}"]
+    for sr in [*sorted(df["sr"].unique()), None]:
+        g = has if sr is None else has[has["sr"] == sr]
+        cells = []
+        for lang in LANGS:
+            gl = g[g["lang"] == lang]
+            cells.append(f"{int(gl['has_fn'].sum())}/{len(gl)}")
+        p = g.pivot(index="article_id", columns="lang", values="has_fn").dropna()
+        differ = int((p.nunique(axis=1) > 1).sum()) if len(p) else 0
+        out.append(
+            f"{'ALL' if sr is None else sr:<8}"
+            + "".join(f"{c:>14}" for c in cells)
+            + f"{differ:>9}"
+        )
+    return out
 
 
 def _sha256_file(path: Path) -> str:
@@ -380,7 +406,13 @@ def build_report(
         add(f"SR {sr}: " + ", ".join(cells) + " (in-force chunks with empty title)")
     add("")
 
-    add(f"8. FIVE RANDOM ALIGNED IN-FORCE ARTICLES (seed={SEED})")
+    add("8. FOOTNOTE COVERAGE (chunks with a non-empty `footnotes` column / chunks)")
+    add(rule)
+    add("Footnotes are kept apart from `text` (Fedlex reuse terms forbid altering content).")
+    L.extend(footnote_coverage_lines(df))
+    add("")
+
+    add(f"9. FIVE RANDOM ALIGNED IN-FORCE ARTICLES (seed={SEED})")
     add(rule)
     for aid in sample_aligned(df):
         add(side_by_side(df, aid))

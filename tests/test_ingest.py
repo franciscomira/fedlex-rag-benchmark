@@ -202,6 +202,126 @@ def test_transitional_only_document() -> None:
     assert (a.number, b.number) == ("u1/1", "u1/12cbis")
 
 
+# ---------------------------------------------------------------- footnotes column
+
+
+def _one(xml_inner: str):
+    (a,) = parse_akn(wrap(xml_inner))
+    return a
+
+
+def test_footnote_in_paragraph_goes_to_footnotes_not_text(parsed: dict) -> None:
+    a = parsed["art_1"]
+    assert a.footnotes == "Fassung gemaess X."
+    assert "Fassung gemaess" not in a.text
+
+
+def test_footnote_in_num_is_kept_on_an_article_in_force() -> None:
+    a = _one(
+        f'<article eId="art_5"><num><b>Art. 5</b>{note("Eingefügt durch Ziff. I des BG.")}</num>'
+        '<paragraph eId="art_5/para"><content><p>Text fuenf.</p></content></paragraph></article>'
+    )
+    assert not a.is_repealed
+    assert a.text == "Text fuenf."
+    assert a.footnotes == "Eingefügt durch Ziff. I des BG."
+
+
+def test_multiple_notes_are_in_document_order_one_per_line() -> None:
+    a = _one(
+        f'<article eId="art_6"><num><b>Art. 6</b>{note("Note num.")}</num>'
+        f"<heading>Titel{note('Note heading.')}</heading>"
+        '<paragraph eId="art_6/para_1"><num>1</num><content>'
+        f"<p>Eins{note('Note eins.')} und mehr.</p></content></paragraph>"
+        '<paragraph eId="art_6/para_2"><num>2</num><content>'
+        f"<p>Zwei.{note('Note zwei.')}</p></content></paragraph></article>"
+    )
+    assert a.footnotes.split("\n") == ["Note num.", "Note heading.", "Note eins.", "Note zwei."]
+    assert a.text == "1 Eins und mehr.\n2 Zwei."
+
+
+def test_note_with_several_paragraphs_and_inline_markup_is_one_line() -> None:
+    a = _one(
+        '<article eId="art_7"><num><b>Art. 7</b></num>'
+        '<paragraph eId="art_7/para"><content><p>Text.'
+        "<authorialNote><p> SR <i>220</i>; BBl 2020 1</p><p>\n  Zweiter Absatz.</p>"
+        "</authorialNote></p></content></paragraph></article>"
+    )
+    assert a.footnotes == "SR 220; BBl 2020 1 Zweiter Absatz."
+    assert "\n" not in a.footnotes and a.text == "Text."
+
+
+def test_article_without_notes_has_empty_footnotes(parsed: dict) -> None:
+    assert parsed["art_257_d"].footnotes == ""
+    assert parsed["art_56"].footnotes == ""
+
+
+def test_repealed_article_keeps_notes_but_empty_text(parsed: dict) -> None:
+    a = parsed["art_10"]
+    assert a.is_repealed and a.text == ""
+    assert a.footnotes.startswith("Aufgehoben durch Anhang 1")
+    assert a.footnotes == a.repeal_note  # single note: same cleaned text
+    two = parsed["art_40_g"]
+    assert two.footnotes == two.repeal_note and "Eingefügt" in two.footnotes
+
+
+def test_repealed_article_with_several_notes_keeps_all() -> None:
+    a = _one(
+        f'<article eId="art_8"><num><b>Art. 8</b>{note("Eingefuegt durch A.")}'
+        f"{note('Aufgehoben durch B.')}</num></article>"
+    )
+    assert a.is_repealed and a.text == ""
+    assert a.footnotes == "Eingefuegt durch A.\nAufgehoben durch B."
+    assert a.repeal_note == "Aufgehoben durch B."
+
+
+def test_it_split_number_note_in_heading_lands_in_footnotes(parsed: dict) -> None:
+    a = parsed["art_697_l_697_m"]
+    assert a.is_repealed and a.text == "" and a.title == ""
+    assert a.footnotes == "Abrogati dall’all. n. 2 della L del 26 set. 2025."
+
+
+def test_transitional_article_and_unarticled_block_footnotes() -> None:
+    art = _one(
+        '<proviso eId="disp_u1"><heading>Schlusstitel</heading>'
+        f'<article eId="disp_u1/art_3"><num><b>Art. 3</b>{note("Num-Note.")}</num>'
+        '<paragraph eId="disp_u1/art_3/para"><content><p>Uebergang.</p></content></paragraph>'
+        "</article></proviso>"
+    )
+    assert art.kind == "transitional" and art.text == "Uebergang." and art.footnotes == "Num-Note."
+    block = _one(
+        f'<transitional eId="disp_u4"><heading>Uebergang{note("Heading-Note.")}</heading>'
+        '<paragraph eId="disp_u4/para"><content>'
+        f"<p>Gilt sinngemaess.{note('Absatz-Note.')}</p></content></paragraph></transitional>"
+    )
+    assert block.number == "u4" and block.text == "Gilt sinngemaess."
+    assert block.title == "Uebergang"
+    assert block.footnotes == "Heading-Note.\nAbsatz-Note."
+
+
+def test_repealed_unarticled_block_keeps_notes() -> None:
+    block = _one(
+        '<transitional eId="disp_u7"><heading>Alt</heading>'
+        '<paragraph eId="disp_u7/para"><content>'
+        f"<p>Aufgehoben{note('Aufgehoben durch Ziff. I.')}</p></content></paragraph></transitional>"
+    )
+    assert block.is_repealed and block.text == ""
+    assert block.footnotes == "Aufgehoben durch Ziff. I."
+
+
+def test_footnotes_are_deterministic_and_text_unchanged_by_notes() -> None:
+    with_notes = parse_akn(full_act())
+    assert [a.footnotes for a in with_notes] == [a.footnotes for a in parse_akn(full_act())]
+    plain = _one(
+        '<article eId="art_9"><num><b>Art. 9</b></num><paragraph eId="art_9/para"><content>'
+        "<p>Text.</p></content></paragraph></article>"
+    )
+    noted = _one(
+        f'<article eId="art_9"><num><b>Art. 9</b>{note("N.")}</num><paragraph eId="art_9/para">'
+        f"<content><p>Text.{note('M.')}</p></content></paragraph></article>"
+    )
+    assert plain.text == noted.text == "Text." and plain.footnotes == ""
+
+
 # ---------------------------------------------------------------- SPARQL result selection
 
 

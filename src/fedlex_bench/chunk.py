@@ -1,7 +1,7 @@
 """One chunk per article: parsed Fedlex acts -> ``data/processed/articles.parquet``.
 
 Columns: sr, article_id, lang, title, text, source_url, consolidation_date, kind, is_repealed,
-is_historical, block_heading.
+is_historical, block_heading, footnotes.
 
 - ``article_id`` = ``"<SR>:<article number>"`` (e.g. ``"220:257d"``); identical across languages,
   so it is the alignment key. Transitional/final provisions (Schlusstitel, Uebergangsbestimmungen)
@@ -14,6 +14,10 @@ is_historical, block_heading.
 - ``is_historical``: the chunk quotes superseded wording (ZGB "Wortlaut der frueheren
   Bestimmungen"). Not law in force: exclude it from retrieval together with repealed chunks.
 - ``block_heading``: heading of the enclosing ``disp_`` block for transitional chunks, else "".
+- ``footnotes``: all footnotes (``<authorialNote>``) of the chunk in document order, one cleaned
+  note per line (joined with a newline), "" when there are none. ``text`` never contains footnote
+  text; the notes are kept verbatim in their own column because the Fedlex reuse terms forbid
+  altering content. Filled for repealed chunks too (their ``text`` is empty).
 - Output is sorted by (sr, kind, natural article order, lang) and written deterministically.
 
 Run: ``uv run python -m fedlex_bench.chunk`` (downloads missing raw files first, idempotent).
@@ -58,6 +62,7 @@ COLUMNS = [
     "is_repealed",
     "is_historical",
     "block_heading",
+    "footnotes",
 ]
 _KIND_RANK = {"article": 0, "transitional": 1}
 _LATIN_RE = re.compile("|".join(sorted(LATIN_ORDINAL, key=len, reverse=True)))
@@ -122,6 +127,7 @@ def articles_to_rows(
                 "is_repealed": a.is_repealed,
                 "is_historical": a.is_historical,
                 "block_heading": a.block_heading,
+                "footnotes": a.footnotes,
             }
         )
     return rows
@@ -162,13 +168,15 @@ def build_articles(
             parsed = parse_akn(path)
             rows.extend(articles_to_rows(parsed, sr, lang, f["url"], entry["consolidation_date"]))
             log.info(
-                "SR %s/%s: %d chunks (%d repealed/elided, %d historical, %d transitional)",
+                "SR %s/%s: %d chunks (%d repealed/elided, %d historical, %d transitional, "
+                "%d with footnotes)",
                 sr,
                 lang,
                 len(parsed),
                 sum(a.is_repealed for a in parsed),
                 sum(a.is_historical for a in parsed),
                 sum(a.kind == "transitional" for a in parsed),
+                sum(bool(a.footnotes) for a in parsed),
             )
     df = pd.DataFrame(rows, columns=COLUMNS)
     for col in ("is_repealed", "is_historical"):

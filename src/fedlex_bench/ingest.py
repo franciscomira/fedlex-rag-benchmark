@@ -376,6 +376,11 @@ class ParsedArticle:
     displayed_number: str = ""  # number as printed in <num>, normalised (cross-check of eId)
     n_paragraphs: int = 0  # structural fingerprint for cross-language comparison
     n_items: int = 0
+    # All footnotes (<authorialNote>) of the article, in document order, including those attached
+    # to <num>/<heading>; one cleaned note per line, joined with "\n". "" when there are none.
+    # Kept apart from ``text`` (Fedlex reuse terms forbid altering content), also for repealed
+    # articles whose ``text`` is empty.
+    footnotes: str = ""
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -512,14 +517,14 @@ def _follows_num(node: etree._Element) -> bool:
         probe = parent
 
 
-def text_of(el: etree._Element) -> str:
-    """Flatten an element to text: footnotes (authorialNote) dropped, block elements on their own
-    line, list/paragraph numbers kept on the same line as their text."""
+def _flatten(el: etree._Element, drop_notes: bool) -> str:
+    """Flatten an element to text, one block element per line (see :func:`text_of`). Footnotes
+    (authorialNote) are skipped when ``drop_notes``, else flattened like any other element."""
     parts: list[str] = []
 
     def walk(node: etree._Element) -> None:
         name = _local(node)
-        if name == "authorialNote":
+        if drop_notes and name == "authorialNote":
             return
         if name in _BLOCKS and not _follows_num(node):
             parts.append("\n")
@@ -540,6 +545,27 @@ def text_of(el: etree._Element) -> str:
     walk(el)
     lines = [_clean(line) for line in "".join(parts).split("\n")]
     return "\n".join(line for line in lines if line)
+
+
+def text_of(el: etree._Element) -> str:
+    """Flatten an element to text: footnotes (authorialNote) dropped, block elements on their own
+    line, list/paragraph numbers kept on the same line as their text."""
+    return _flatten(el, drop_notes=True)
+
+
+def footnotes_of(el: etree._Element) -> str:
+    """All footnotes under ``el`` (including those inside ``num``/``heading``), in document
+    order, each flattened to one cleaned line (paragraphs of a note joined with a space), joined
+    with ``"\\n"``. Only outermost notes count (a note nested in a note is part of its parent).
+    Empty notes are skipped; ``""`` when there are none."""
+    notes: list[str] = []
+    for n in el.iter(f"{{{AKN_NS}}}authorialNote"):
+        if any(_local(p) == "authorialNote" for p in n.iterancestors()):
+            continue
+        t = " ".join(_flatten(n, drop_notes=False).split("\n")).strip()
+        if t:
+            notes.append(t)
+    return "\n".join(notes)
 
 
 def _marginal_title(article: etree._Element, has_body: bool = True) -> str:
@@ -652,6 +678,9 @@ def parse_akn(xml: bytes | str | Path) -> list[ParsedArticle]:
       amendment-of-another-act introduction followed by the elision mark. Such articles keep an
       empty text.
     - ``is_historical``: the enclosing block quotes superseded wording (see ``_HISTORICAL_RE``).
+    - ``footnotes``: every ``<authorialNote>`` of the article (also those attached to
+      ``<num>``/``<heading>``, also for repealed articles) or, for a block without articles, of
+      the whole block; see :func:`footnotes_of`. ``text`` never contains footnote text.
     """
     root = _read_root(xml)
     out: list[ParsedArticle] = []
@@ -691,6 +720,7 @@ def parse_akn(xml: bytes | str | Path) -> list[ParsedArticle]:
                 displayed_number=normalize_article_number(text_of(num)) if num is not None else "",
                 n_paragraphs=len(art.findall(".//a:paragraph", NS)),
                 n_items=len(art.findall(".//a:item", NS)),
+                footnotes=footnotes_of(art),
             )
         )
     for unit in _units(root):
@@ -717,6 +747,7 @@ def parse_akn(xml: bytes | str | Path) -> list[ParsedArticle]:
                 displayed_number="",
                 n_paragraphs=len(unit.findall(".//a:paragraph", NS)),
                 n_items=len(unit.findall(".//a:item", NS)),
+                footnotes=footnotes_of(unit),
             )
         )
     return out

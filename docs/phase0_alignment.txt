@@ -36,7 +36,7 @@ SR 281.1: consolidation 2026-01-01 (applicable 2026-01-01 .. open; as_of 2026-10
     de: sha256 cc7ef0971b4a63f66cffb656fb98b785a6a72fbc37ab6ac4dcfea178f68aaeb2  647371 bytes
     fr: sha256 d549d9568a1a5d627bd7365c699a6e22edb02cd8d97ee23c42773017eebe19eb  687237 bytes
     it: sha256 eb751485c06ab82507a9fd40e678d0f665f69f9f467d34f82c1dbf43ead3fd33  644715 bytes
-articles.parquet: sha256 9b7e404de8a86e09e66716f79a3a18141c13e68064ba58916971613aae81a491  (12219 rows)
+articles.parquet: sha256 e6a8ddac5bcabe3b5eb3600b05fc18e1370af3f03310de8ce10c925f3646b75c  (12219 rows)
 
 1. COUNTS PER ACT AND LANGUAGE
 ------------------------------------------------------------------------
@@ -183,7 +183,21 @@ SR 241: de=1, fr=1, it=1 (in-force chunks with empty title)
 SR 272: de=23, fr=23, it=23 (in-force chunks with empty title)
 SR 281.1: de=2, fr=2, it=2 (in-force chunks with empty title)
 
-8. FIVE RANDOM ALIGNED IN-FORCE ARTICLES (seed=42)
+8. FOOTNOTE COVERAGE (chunks with a non-empty `footnotes` column / chunks)
+------------------------------------------------------------------------
+Footnotes are kept apart from `text` (Fedlex reuse terms forbid altering content).
+SR                  de            fr            it   differ
+210           506/1277      506/1277      503/1277       23
+220           566/1690      571/1690      563/1690       23
+221.214.1         23/46         25/46         23/46        2
+221.229.1        85/112        85/112        82/112        3
+235.1            23/77         24/77         23/77        1
+241              23/33         24/33         23/33        1
+272            141/428       150/428       142/428       14
+281.1          298/410       309/410       301/410       30
+ALL          1665/4073     1694/4073     1660/4073       97
+
+9. FIVE RANDOM ALIGNED IN-FORCE ARTICLES (seed=42)
 ------------------------------------------------------------------------
 === 221.214.1:28 ===
 --- DE | title: Prüfung der Kreditfähigkeit
