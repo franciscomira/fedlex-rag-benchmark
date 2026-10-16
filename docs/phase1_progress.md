@@ -2,22 +2,18 @@
 
 Last updated: 2026-10-16. Purpose: let a fresh session continue without the long history. The report for readers will be `docs/phase1_report.md`.
 
-## Where things stand
+## Where things stand (2026-10-16)
 
-- Spec approved: `docs/benchmark_spec.md`. Code in `src/fedlex_bench/benchmark/` (plan, brief, assemble, select, validate, bm25, structure, twins). 721 tests passed at last full run.
-- Plan: `benchmark/plan/slots.jsonl` (258 slots, sha256 511bb7ec...), twins in `benchmark/plan/twins.jsonl`, brief indexes `benchmark/plan/index*.json`. Briefs are git-ignored; regenerate with `uv run python -m fedlex_bench.benchmark brief --slots benchmark/plan/slots.jsonl` (and `--pilot`).
-- Round-0 pilot (old plan) archived in `benchmark/archive/pilot_round0/`. Void.
-- Round-1 drafts for all 258 slots: `benchmark/drafts/*.jsonl` (11 files). Assembled: `benchmark/assembled/candidates.jsonl`; critic inputs in `benchmark/assembled/critic_in/`.
-- Critic round 1: `benchmark/critic/round1-chunk-{1..6}.jsonl`. Result: 219 keep, 39 fix, 0 drop (fix reasons: facts_unsupported 8, other 8, competing_article 7, ambiguous 5, lexical_copy 5, trap_answerable 4, outside_knowledge 2).
-- Fix pass in progress: revised records go to `benchmark/drafts_fix/round1-{A,B}.jsonl`; slot lists in `benchmark/critic/fix{A,B}.json`.
+- Spec approved: `docs/benchmark_spec.md`. Package `src/fedlex_bench/benchmark/` (plan, brief, assemble, select, validate, bm25, structure, twins, review_app, freeze, baseline). Full test suite passes, ruff clean.
+- Plan `benchmark/plan/slots.jsonl` (258 slots, sha256 511bb7ec...). Drafts in `benchmark/drafts/`, critic verdicts in `benchmark/critic/` (rounds 1 to 5; round 1: 219 keep, 39 fix, 0 drop; all fixes resolved by round 5).
+- Selected benchmark candidates: `benchmark/selected/{dev,test}.jsonl` = 170 items (150 answerable + 20 traps; dev 45, test 125), validator clean, all `review_status: unreviewed`. Reserve of 88 kept-but-unselected items in `benchmark/reserve/`.
+- BM25 recall@10 on dev (first run): same-language DE 25%, FR 45%, IT 36%; EN 0%; all-language index 30% overall (n=40).
 
 ## Next steps
 
-1. Merge revised records into the base drafts (replace by slot id), re-assemble, run critic round 2 on the 39 revised slots only (verdicts must carry the new `candidate_sha256` and `"round": 2`).
-2. Pilot items: 10 pilot slots are part of the 258; they are not special any more.
-3. `select` with `--slots` to build `benchmark/selected/{dev,test}.jsonl` (backfills drops from surplus), then `validate`.
-4. Translations for the parallel subset (24 accepted items, 72 translations) only after the human accepts the originals.
-5. Review app (Streamlit), human review, freeze to `benchmark/v1/`, BM25 recall@10 on dev, `docs/phase1_report.md`.
+1. Human review in the Streamlit app: `uv run --group review streamlit run src/fedlex_bench/benchmark/review_app.py`. Rejections need backfill from `benchmark/reserve/` in the same cell (not automated yet).
+2. After acceptance: parallel translated subset (24 accepted single items, 6 per query language, 6 dev + 18 test, 72 translations, critic check on meaning, human review).
+3. eval-reviewer pass on the data (leakage, verbatim quoting, unsupported gold, imbalance), then `freeze` to `benchmark/v1/`, tag `benchmark-v1`, write `docs/phase1_report.md`.
 
 ## Findings to carry into the report
 
