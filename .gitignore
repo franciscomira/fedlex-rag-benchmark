@@ -10,3 +10,4 @@ data/raw/*
 models/
 eval/cache/
 benchmark/plan/briefs/
+data/processed/review_aids/
