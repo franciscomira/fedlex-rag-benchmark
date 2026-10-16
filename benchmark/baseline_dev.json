@@ -1,0 +1,98 @@
+{
+  "dev_sha256": "369616baa61a00c5fd85f40cdee0017ec60b480abd826e76d169cd8c9ebd0f46",
+  "k": 10,
+  "n_items": 40,
+  "n_traps_excluded": 5,
+  "note": "English queries against the de/fr/it indexes are cross-lingual by construction: BM25 only matches tokens the question shares with the article (names, numbers, Latin terms). The same holds for a query in another language than the index. Documents with a zero score never count as hits.",
+  "recall_at_10": {
+    "all": {
+      "de": {
+        "n": 8,
+        "recall": 0.4375
+      },
+      "en": {
+        "n": 11,
+        "recall": 0.0
+      },
+      "fr": {
+        "n": 10,
+        "recall": 0.45
+      },
+      "it": {
+        "n": 11,
+        "recall": 0.3636
+      },
+      "overall": {
+        "n": 40,
+        "recall": 0.3
+      }
+    },
+    "de": {
+      "de": {
+        "n": 8,
+        "recall": 0.25
+      },
+      "en": {
+        "n": 11,
+        "recall": 0.0
+      },
+      "fr": {
+        "n": 10,
+        "recall": 0.0
+      },
+      "it": {
+        "n": 11,
+        "recall": 0.0
+      },
+      "overall": {
+        "n": 40,
+        "recall": 0.05
+      }
+    },
+    "fr": {
+      "de": {
+        "n": 8,
+        "recall": 0.0
+      },
+      "en": {
+        "n": 11,
+        "recall": 0.0
+      },
+      "fr": {
+        "n": 10,
+        "recall": 0.45
+      },
+      "it": {
+        "n": 11,
+        "recall": 0.0
+      },
+      "overall": {
+        "n": 40,
+        "recall": 0.1125
+      }
+    },
+    "it": {
+      "de": {
+        "n": 8,
+        "recall": 0.0
+      },
+      "en": {
+        "n": 11,
+        "recall": 0.0
+      },
+      "fr": {
+        "n": 10,
+        "recall": 0.1
+      },
+      "it": {
+        "n": 11,
+        "recall": 0.3636
+      },
+      "overall": {
+        "n": 40,
+        "recall": 0.125
+      }
+    }
+  },
+  "split": "dev"
+}
