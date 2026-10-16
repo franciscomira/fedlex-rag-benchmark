@@ -2,7 +2,7 @@
 
 Public portfolio project. Plan: docs/PROJECT_PLAN.md (live version linked inside it).
 
-Status: Phase 1: benchmark
+Status: Phase 1 done (benchmark v1 frozen, tag benchmark-v1, see docs/phase1_report.md). Next: Phase 2, baseline harness.
 
 ## Core question
 Can a small fine-tuned multilingual reranker match a frontier LLM reranker on cross-lingual retrieval over Swiss federal law (DE/FR/IT), at a fraction of the cost? Answers must cite article-level sources.
