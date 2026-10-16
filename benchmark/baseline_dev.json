@@ -1,7 +1,8 @@
 {
-  "dev_sha256": "369616baa61a00c5fd85f40cdee0017ec60b480abd826e76d169cd8c9ebd0f46",
+  "dev_sha256": "936f576ad321ca020a4095148c226cca155a85f9685a418b31171b8d761e40f0",
   "k": 10,
   "n_items": 40,
+  "n_translations": 18,
   "n_traps_excluded": 5,
   "note": "English queries against the de/fr/it indexes are cross-lingual by construction: BM25 only matches tokens the question shares with the article (names, numbers, Latin terms). The same holds for a query in another language than the index. Documents with a zero score never count as hits.",
   "recall_at_10": {
@@ -94,5 +95,6 @@
       }
     }
   },
-  "split": "dev"
+  "split": "dev",
+  "translations_included": false
 }
