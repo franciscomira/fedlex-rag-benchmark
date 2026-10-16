@@ -1,0 +1,1 @@
+{"judges": {"claude-judge": {"agreement": 0.9, "confusion": {"human_approve": {"judge_approve": 27, "judge_reject": 3}, "human_reject": {"judge_approve": 0, "judge_reject": 0}}, "disagreements": ["v1-0039", "v1-0050", "v1-0149"], "n_compared": 30, "no_verdict": []}}, "missing_from_selection": [], "n_reviewed": 30, "sample_size": 30}

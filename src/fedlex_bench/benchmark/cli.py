@@ -6,6 +6,7 @@ Commands (docs/benchmark_spec.md):
 - ``brief``     write the writer briefs for the slots (all, or ``--pilot``)
 - ``assemble``  merge writer drafts with the plan into candidate items
 - ``select``    critic verdicts + candidates -> dev / test / reserve files with final ids
+- ``apply-revisions``  swap revised candidates into the selection (resets review)
 - ``validate``  run every check of spec section 10 (``--freeze`` adds the freeze conditions)
 - ``freeze``    write ``benchmark/v1`` (dev, test, test gold ids, SHA256SUMS)
 - ``baseline``  BM25 recall@10 on the dev split, per query language and index
@@ -30,6 +31,7 @@ from fedlex_bench.benchmark import (
     freeze,
     machine_review,
     plan,
+    revisions,
     select,
     validate,
 )
@@ -44,6 +46,10 @@ COMMANDS: dict[str, tuple[Callable[[list[str]], int], str]] = {
     "baseline": (baseline.run, "BM25 recall@10 on the dev split (never the test split)"),
     "calibration-sample": (machine_review.run_sample, "pick the 30 calibration items (seeded)"),
     "calibration": (machine_review.run_calibration, "human vs machine judges on the sample"),
+    "apply-revisions": (
+        revisions.run,
+        "swap revised candidates into the selection (resets review)",
+    ),
     "machine-status": (machine_review.run_status, "verdict counts per machine judge"),
 }
 
