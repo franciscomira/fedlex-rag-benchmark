@@ -1,5 +1,5 @@
 {"id": "v1-0129", "verdict": "approve", "issues": [], "reason": "VVG 46a gives continuation/administration duty, Art. 81 gives step-in, notice and representative; both needed, true in DE/FR/IT.", "confidence": "high"}
-{"id": "v1-0130", "verdict": "reject", "issues": ["fact_not_asked"], "reason": "Question states a medical exam is required, so the 14-day general binding period (fact 1) does not answer it; 4 weeks and start of period suffice.", "confidence": "medium"}
+{"confidence": "high", "id": "v1-0130", "issues": [], "reason": "VVG art. 1 al. 2-4: four weeks if medical exam, starts on handing over or sending, release if no acceptance; matches question in all versions.", "verdict": "approve"}
 {"id": "v1-0131", "verdict": "approve", "issues": [], "reason": "Art. 4 VVG states disclosure duty, written/text form, definition of relevance and presumption for precise questions in all three languages.", "confidence": "high"}
 {"id": "v1-0132", "verdict": "approve", "issues": [], "reason": "Art. 7 DSG covers privacy by design from planning, proportionality criteria and minimal default settings; consistent in DE/FR/IT.", "confidence": "high"}
 {"id": "v1-0133", "verdict": "approve", "issues": [], "reason": "Art. 60(1)(a) DSG: intentional incomplete access answer by private persons punished on complaint with fine up to CHF 250,000.", "confidence": "high"}

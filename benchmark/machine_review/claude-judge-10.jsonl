@@ -2,7 +2,7 @@
 {"id": "v1-0146", "verdict": "approve", "issues": [], "reason": "Art. 78 ZPO para 1 and 2 answer both parts (third-party notice and further notice); facts hold in all languages.", "confidence": "high"}
 {"id": "v1-0147", "verdict": "approve", "issues": [], "reason": "Domestic arbitration, Art. 360 ZPO gives default of three and the even-number presumption; facts hold in all languages.", "confidence": "high"}
 {"id": "v1-0148", "verdict": "approve", "issues": [], "reason": "Art. 285 ZPO lists the contents of the joint petition; all facts match DE/FR/IT.", "confidence": "high"}
-{"id": "v1-0149", "verdict": "reject", "issues": ["fact_unsupported"], "reason": "Fact 1 says liquidators must send creditors an extract; IT text of Art. 326 only says compile an extract and keep it available, no sending.", "confidence": "medium"}
+{"confidence": "high", "id": "v1-0149", "issues": [], "reason": "Art. 326 SchKG: extract and ten-day display before any provisional payment, complaint to supervisory authority; hedged fact holds in DE/FR/IT.", "verdict": "approve"}
 {"id": "v1-0150", "verdict": "approve", "issues": [], "reason": "Art. 68a SchKG answers service on the other spouse and her right to object; late-notification fact is a close elaboration.", "confidence": "medium"}
 {"id": "v1-0151", "verdict": "approve", "issues": [], "reason": "Art. 214 SchKG directly answers whether the set-off can be contested; facts hold in all languages.", "confidence": "high"}
 {"id": "v1-0152", "verdict": "approve", "issues": [], "reason": "Art. 303 answers keeping rights against co-debtors despite voting, Art. 216 the full claim in simultaneous bankruptcies; both needed.", "confidence": "high"}

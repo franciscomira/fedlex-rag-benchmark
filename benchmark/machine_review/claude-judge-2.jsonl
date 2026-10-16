@@ -6,7 +6,7 @@
 {"id": "v1-0022", "verdict": "approve", "issues": [], "reason": "334 paras 1-2 answer both questions directly; natural French, no copied wording.", "confidence": "high"}
 {"id": "v1-0023", "verdict": "approve", "issues": [], "reason": "964d paras 1, 2 and 5 answer the reporting, consolidation and local-authority parts.", "confidence": "high"}
 {"id": "v1-0024", "verdict": "approve", "issues": [], "reason": "423 covers self-interested management: principal takes benefits, reimburses only to extent enriched.", "confidence": "high"}
-{"id": "v1-0025", "verdict": "reject", "issues": ["fact_not_asked"], "reason": "Question states delegation was not permitted; fact 2 (authorised delegation, care in choice) answers nothing asked.", "confidence": "medium"}
+{"confidence": "high", "id": "v1-0025", "issues": [], "reason": "Unauthorised delegation by the mandatary: liability as for own acts and direct claim against the third party, both stated in 399 in all languages.", "verdict": "approve"}
 {"id": "v1-0026", "verdict": "approve", "issues": [], "reason": "1099 para 2 gives protest and start date; 1015 para 2 needed for preserving recourse; facts supported.", "confidence": "medium"}
 {"id": "v1-0027", "verdict": "approve", "issues": [], "reason": "653 paras 1-2 answer who may receive the rights and when capital increases; paraphrased well.", "confidence": "high"}
 {"id": "v1-0028", "verdict": "approve", "issues": [], "reason": "272b para 1 gives 4-year maximum for dwellings and one or two extensions; court framing excludes para 2.", "confidence": "high"}

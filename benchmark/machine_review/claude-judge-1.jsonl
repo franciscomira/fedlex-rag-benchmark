@@ -5,7 +5,7 @@
 {"id": "v1-0005", "verdict": "approve", "issues": [], "reason": "Art. 795a covers who calls, when contributions are due and bankruptcy effect; facts match all versions.", "confidence": "high"}
 {"id": "v1-0006", "verdict": "approve", "issues": [], "reason": "Art. 108 OR lists when no extra period is needed incl. fixed-date deal; Art. 366 concerns pre-deadline delay, not better here.", "confidence": "medium"}
 {"id": "v1-0007", "verdict": "approve", "issues": [], "reason": "Art. 254 OR directly voids the tied insurance deal; facts supported in all three languages.", "confidence": "high"}
-{"id": "v1-0008", "verdict": "reject", "issues": ["other_article_answers"], "reason": "Whether a 2/3 decision binds a dissenting bondholder also depends on Art. 1176 OR (approval by upper cantonal authority), missing from gold.", "confidence": "medium"}
+{"confidence": "high", "id": "v1-0008", "issues": [], "reason": "Art. 1174 al. 2 protects pledge rank subject to 1170 no. 7; 1170 gives the two-thirds majority; both needed, facts hold in DE/FR/IT.", "verdict": "approve"}
 {"id": "v1-0009", "verdict": "approve", "issues": [], "reason": "Art. 143 OR answers: absent a declaration, joint liability only in cases set by law; facts supported.", "confidence": "medium"}
 {"id": "v1-0010", "verdict": "approve", "issues": [], "reason": "Art. 337 OR covers immediate termination, written reasons on request and the no-fault incapacity exclusion.", "confidence": "high"}
 {"id": "v1-0011", "verdict": "approve", "issues": [], "reason": "Art. 874(1),(3) answers how and effect on prior debts; fact notes IT registration wording. Art. 888 majority is extra detail only.", "confidence": "medium"}

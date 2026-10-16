@@ -4,7 +4,7 @@
 {"id": "v1-0036", "verdict": "approve", "issues": [], "reason": "ZPO 353 covers opt-out to IPRG ch.12 and form requirement; facts true in all three versions.", "confidence": "high"}
 {"id": "v1-0037", "verdict": "approve", "issues": [], "reason": "ZPO 83(1)(2) answers substitution and cost liability exactly; natural French question.", "confidence": "high"}
 {"id": "v1-0038", "verdict": "approve", "issues": [], "reason": "SchKG 107 answers contest right, 10 days, 20-day suit; non-contest fact is the consequence of the deadline.", "confidence": "medium"}
-{"id": "v1-0039", "verdict": "reject", "issues": ["fact_unsupported"], "reason": "Fact 1 says 'after at most three calls'; DE/FR/IT all say after three calls. Fix wording; item otherwise sound.", "confidence": "medium"}
+{"confidence": "high", "id": "v1-0039", "issues": [], "reason": "Art. 126 SchKG covers the auction with prior-ranking pledge claims and the end of enforcement absent a sufficient bid; facts match all versions.", "verdict": "approve"}
 {"id": "v1-0040", "verdict": "approve", "issues": [], "reason": "SchKG 292 gives 3 years from bankruptcy and from loss certificate; both parts of question answered.", "confidence": "medium"}
 {"id": "v1-0041", "verdict": "approve", "issues": [], "reason": "No real estate gains tax rule in the 8 acts (searched DE/FR); plausible question.", "confidence": "high"}
 {"id": "v1-0042", "verdict": "approve", "issues": [], "reason": "No in-force article on early declaration of majority; only unrelated transitional rules mention Muendigkeit.", "confidence": "medium"}
