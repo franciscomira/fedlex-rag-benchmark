@@ -3,8 +3,16 @@
 Everything that must be exact is copied from the plan or computed here: ids, act, languages,
 split, BM25 ranks and lexical overlap. The writer's text supplies only the question, the gold
 facts, the difficulty and, for traps, the reason. ``review_status`` is always ``unreviewed``.
-A candidate is an item without an id plus ``slot_id`` (the critic answers by slot id); ``select``
-turns the kept candidates into the dev and test files.
+
+A candidate is an item without an id plus two fields the later steps need:
+
+- ``slot_id``: the critic answers by slot id; ``select`` moves it into ``provenance``;
+- ``candidate_sha256``: sha256 of the canonical JSON of ``{question, gold_facts}``. A critic
+  verdict must quote it, so a verdict can never be applied to text that was rewritten later.
+
+The brief index written by ``brief`` is required: ``plan_sha256`` and ``brief_sha256`` come from
+it (not from the current slots file), and a draft is refused when its slot differs from the slot
+the brief was written for (plan regenerated after the briefs) or when no brief exists for it.
 """
 
 from __future__ import annotations
@@ -18,14 +26,18 @@ import pandas as pd
 
 from fedlex_bench.benchmark import drafts as drafts_mod
 from fedlex_bench.benchmark.bm25 import Bm25Index, build_indexes, compute_ranks
-from fedlex_bench.benchmark.brief import read_index
+from fedlex_bench.benchmark.brief import BriefIndex, merge_indexes, read_index
 from fedlex_bench.benchmark.common import (
     CANDIDATES_PATH,
     DRAFTS_DIR,
+    INDEX_PATH,
+    INDEX_PILOT_PATH,
     SLOTS_PATH,
+    canonical_sha256,
     load_corpus,
     read_jsonl,
     sha256_file,
+    slot_hash,
     write_jsonl,
 )
 from fedlex_bench.chunk import ARTICLES_PARQUET
@@ -38,14 +50,15 @@ class AssembleResult:
     candidates: list[dict] = field(default_factory=list)
     skipped: list[dict] = field(default_factory=list)
     missing_slots: list[str] = field(default_factory=list)  # in the plan, no draft at all
+    problems: list[str] = field(default_factory=list)  # drafts refused because of the brief index
 
 
-def _item(
-    slot: dict,
-    rec: dict,
-    indexes: dict[str, Bm25Index],
-    provenance: dict,
-) -> dict:
+def candidate_hash(question: str, gold_facts: list[dict]) -> str:
+    """The hash a critic verdict must quote."""
+    return canonical_sha256({"question": question, "gold_facts": gold_facts})
+
+
+def _item(slot: dict, rec: dict, indexes: dict[str, Bm25Index], provenance: dict) -> dict:
     is_trap = slot["qtype"] == "trap"
     gold = list(slot["gold_article_ids"])
     facts = [
@@ -60,6 +73,7 @@ def _item(
     return {
         "id": None,
         "slot_id": slot["slot_id"],
+        "candidate_sha256": candidate_hash(question, facts),
         "split": slot["split"],
         "qtype": slot["qtype"],
         "is_trap": is_trap,
@@ -94,12 +108,11 @@ def assemble(
     df: pd.DataFrame,
     *,
     drafted_on: str,
+    brief_index: BriefIndex,
     indexes: dict[str, Bm25Index] | None = None,
     agent_file: Path | None = None,
-    plan_sha256: str | None = None,
     drafter: str = "question-writer",
     model: str = "opus",
-    brief_index: dict[str, dict] | None = None,
 ) -> AssembleResult:
     """Merge valid draft records (see ``drafts.load_drafts``) with the plan."""
     if not _DATE.fullmatch(drafted_on):
@@ -110,7 +123,7 @@ def assemble(
         "drafter": drafter,
         "model": model,
         "agent_file_sha256": agent_sha,
-        "plan_sha256": plan_sha256,
+        "plan_sha256": brief_index.plan_sha256,
         "drafted_on": drafted_on,
         "critic_verdict": None,
         "critic_rounds": 0,
@@ -122,11 +135,23 @@ def assemble(
         if rec is None:
             result.missing_slots.append(slot["slot_id"])
             continue
+        entry = brief_index.slots.get(slot["slot_id"])
+        if entry is None:
+            result.problems.append(
+                f"{slot['slot_id']}: no brief was written for this slot (it is in no brief index)"
+            )
+            continue
+        if entry.get("slot_sha256") != slot_hash(slot):
+            result.problems.append(
+                f"{slot['slot_id']}: the slot in the plan differs from the slot the brief "
+                f"{entry.get('file')} was written for (plan regenerated after the briefs?); "
+                "the draft is refused"
+            )
+            continue
         if rec["skip"]:
             result.skipped.append({"slot_id": slot["slot_id"], "skip_reason": rec["skip_reason"]})
             continue
-        brief_sha = (brief_index or {}).get(slot["slot_id"], {}).get("sha256")
-        provenance = {**base, "brief_sha256": brief_sha}
+        provenance = {**base, "brief_sha256": entry.get("sha256")}
         result.candidates.append(_item(slot, rec, indexes, provenance))
     return result
 
@@ -142,33 +167,55 @@ def run(argv: list[str] | None = None, corpus: pd.DataFrame | None = None) -> in
     ap.add_argument("--drafted-on", required=True, help="date of drafting, YYYY-MM-DD")
     ap.add_argument("--drafter", default="question-writer")
     ap.add_argument("--model", default="opus", help="model alias as given to the harness")
-    ap.add_argument("--brief-index", type=Path, help="briefs/index.json (stores the brief sha256)")
+    ap.add_argument(
+        "--brief-index",
+        type=Path,
+        nargs="+",
+        help="brief index file(s), merged (default: plan/index.json and plan/index-pilot.json)",
+    )
     ap.add_argument("--parquet", type=Path, default=ARTICLES_PARQUET)
     ap.add_argument("--allow-partial", action="store_true", help="write the valid records anyway")
     args = ap.parse_args(argv)
 
+    index_paths = args.brief_index or [p for p in (INDEX_PATH, INDEX_PILOT_PATH) if p.exists()]
+    missing = [p for p in index_paths if not p.exists()]
+    if not index_paths or missing:
+        print(
+            "no brief index found"
+            + (f" ({', '.join(map(str, missing))})" if missing else "")
+            + ": run `benchmark brief` first; assemble takes the plan hash and the slot hashes "
+            "from it"
+        )
+        return 1
+    brief_index, index_problems = merge_indexes([read_index(p) for p in index_paths])
+    if index_problems:
+        print(f"{len(index_problems)} problem(s) with the brief indexes:")
+        for p in index_problems:
+            print(f"  {p}")
+        return 1
+
     slots = read_jsonl(args.slots)
     loaded = drafts_mod.load_drafts(args.drafts, slots)
     print(f"read {len(loaded.records)} valid draft records from {len(loaded.files)} file(s)")
-    if loaded.problems:
-        print(f"{len(loaded.problems)} problem(s) in the drafts:")
-        for p in loaded.problems:
-            print(f"  {p}")
-        if not args.allow_partial:
-            print("nothing written (use --allow-partial to write the valid records)")
-            return 1
     df = corpus if corpus is not None else load_corpus(args.parquet)
     result = assemble(
         slots,
         loaded.records,
         df,
         drafted_on=args.drafted_on,
+        brief_index=brief_index,
         agent_file=args.agent_file,
-        plan_sha256=sha256_file(args.slots),
         drafter=args.drafter,
         model=args.model,
-        brief_index=read_index(args.brief_index) if args.brief_index else None,
     )
+    problems = [*loaded.problems, *result.problems]
+    if problems:
+        print(f"{len(problems)} problem(s) in the drafts:")
+        for p in problems:
+            print(f"  {p}")
+        if not args.allow_partial:
+            print("nothing written (use --allow-partial to write the valid records)")
+            return 1
     sha = write_jsonl(args.out, result.candidates)
     if result.skipped:
         write_jsonl(args.out.with_name("skipped.jsonl"), result.skipped)
@@ -179,4 +226,4 @@ def run(argv: list[str] | None = None, corpus: pd.DataFrame | None = None) -> in
     for s in result.skipped:
         print(f"  skipped {s['slot_id']}: {s['skip_reason']}")
     print(f"wrote {args.out} (sha256 {sha})")
-    return 1 if loaded.problems else 0
+    return 1 if problems else 0

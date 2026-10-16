@@ -13,10 +13,12 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from fedlex_bench.benchmark.common import DIFFICULTIES
+from fedlex_bench.benchmark.common import DIFFICULTIES, numbered_lines
+from fedlex_bench.benchmark.refs import mentions_article_number, mentions_sr
 
 COMMON_KEYS = {"slot_id", "skip", "skip_reason", "note", "competing_candidates"}
-ANSWERABLE_KEYS = COMMON_KEYS | {"question", "gold_facts", "difficulty"}
+# trap_reason is part of every record of the spec format: null on answerable slots
+ANSWERABLE_KEYS = COMMON_KEYS | {"question", "gold_facts", "difficulty", "trap_reason"}
 TRAP_KEYS = COMMON_KEYS | {"question", "trap_reason", "gold_facts", "difficulty"}
 ANSWERABLE_REQUIRED = {"slot_id", "skip", "question", "gold_facts", "difficulty"}
 TRAP_REQUIRED = {"slot_id", "skip", "question", "trap_reason"}
@@ -32,6 +34,11 @@ class DraftLoad:
     files: list[str] = field(default_factory=list)
 
 
+def _typed_a_reference(text: str) -> bool:
+    """An article id ("220:257d"), "Art./Artikel/article/articolo" + number, or "SR" + number."""
+    return bool(_ID_LIKE.search(text) or mentions_article_number(text) or mentions_sr(text))
+
+
 def _check_record(rec: dict, slot: dict, where: str) -> list[str]:
     """Problems of one record against its slot (``[]`` when fine)."""
     out: list[str] = []
@@ -44,9 +51,12 @@ def _check_record(rec: dict, slot: dict, where: str) -> list[str]:
         reason = rec.get("skip_reason")
         if not isinstance(reason, str) or not reason.strip():
             out.append(f"{where}: {slot_id}: skip is true but skip_reason is empty")
-        unknown = set(rec) - COMMON_KEYS
+        unknown = set(rec) - TRAP_KEYS - ANSWERABLE_KEYS  # a skip record may carry null fields
         if unknown:
             out.append(f"{where}: {slot_id}: unknown key(s) {sorted(unknown)}")
+        for key in ("question", "gold_facts", "difficulty", "trap_reason", "competing_candidates"):
+            if rec.get(key) not in (None, "", [], {}):
+                out.append(f"{where}: {slot_id}: skip record has a non-empty {key!r}")
         return out
 
     allowed = TRAP_KEYS if is_trap else ANSWERABLE_KEYS
@@ -54,8 +64,7 @@ def _check_record(rec: dict, slot: dict, where: str) -> list[str]:
     for key in sorted(required - set(rec)):
         out.append(f"{where}: {slot_id}: missing field {key!r}")
     for key in sorted(set(rec) - allowed):
-        hint = " (trap_reason belongs to trap slots only)" if key == "trap_reason" else ""
-        out.append(f"{where}: {slot_id}: unknown key {key!r}{hint}")
+        out.append(f"{where}: {slot_id}: unknown key {key!r}")
     if "skip_reason" in rec and rec["skip_reason"] not in (None, ""):
         out.append(f"{where}: {slot_id}: skip_reason is set but skip is false")
 
@@ -63,16 +72,19 @@ def _check_record(rec: dict, slot: dict, where: str) -> list[str]:
     if "question" in rec:
         if not isinstance(question, str) or not question.strip():
             out.append(f"{where}: {slot_id}: question must be a non-empty string")
-        elif _ID_LIKE.search(question):
+        elif _typed_a_reference(question):
             out.append(
-                f"{where}: {slot_id}: question contains an article id; writers never type ids"
+                f"{where}: {slot_id}: question contains an article id, article number or SR "
+                "number; writers never type ids or numbers"
             )
-    cc = rec.get("competing_candidates", [])
+    cc = rec.get("competing_candidates") or []
     if not isinstance(cc, list) or not all(isinstance(x, str) for x in cc):
         out.append(f"{where}: {slot_id}: competing_candidates must be a list of strings")
-    if not isinstance(rec.get("note", ""), str):
+    if rec.get("note") is not None and not isinstance(rec["note"], str):
         out.append(f"{where}: {slot_id}: note must be a string")
 
+    if not is_trap and rec.get("trap_reason") is not None:
+        out.append(f"{where}: {slot_id}: trap_reason must be null on a non-trap slot")
     if is_trap:
         reason = rec.get("trap_reason")
         if "trap_reason" in rec and (not isinstance(reason, str) or not reason.strip()):
@@ -109,8 +121,11 @@ def _check_facts(facts: object, slot: dict, where: str) -> list[str]:
         text = fact.get("text")
         if "text" in fact and (not isinstance(text, str) or not text.strip()):
             out.append(f"{where}: {slot_id}: gold_facts[{i}] text must be a non-empty string")
-        elif isinstance(text, str) and _ID_LIKE.search(text):
-            out.append(f"{where}: {slot_id}: gold_facts[{i}] text contains an article id")
+        elif isinstance(text, str) and _typed_a_reference(text):
+            out.append(
+                f"{where}: {slot_id}: gold_facts[{i}] text contains an article id, article "
+                "number or SR number"
+            )
         if "article" in fact and fact["article"] not in tuple(labels):
             out.append(
                 f"{where}: {slot_id}: gold_facts[{i}] label {fact['article']!r} is not allowed "
@@ -132,9 +147,7 @@ def load_drafts(directory: Path, slots: list[dict]) -> DraftLoad:
     load = DraftLoad()
     for path in sorted(directory.glob("*.jsonl")):
         load.files.append(path.name)
-        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-            if not line.strip():
-                continue
+        for n, line in numbered_lines(path.read_bytes().decode("utf-8")):
             where = f"{path.name}:{n}"
             try:
                 rec = json.loads(line)

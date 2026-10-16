@@ -7,15 +7,19 @@ never choose or see an article id.
 Algorithm (all inputs sorted by natural order, one ``random.Random(20261015)`` consumed in the
 fixed order below):
 
+0. **Twins.** Pool articles whose German text has a character 5-gram Jaccard of at least 0.7 with
+   another pool article (``twins.py``) are removed as gold candidates, primary and secondary. They
+   stay in the retrieval corpus. The removed articles are listed in ``twins.jsonl``.
 1. **Cells.** One cell per (act, split). Final quotas: the act table of the spec, split into dev
    (40) and test (110) by largest remainder (ties go to the earlier act). Draft slots per cell:
    ``ceil(1.5 x quota)``, so 228 answerable slots for 150 final items.
 2. **cross_ref.** 22 final cross_ref items are spread over the cells by largest remainder in
-   proportion to the quotas. Candidate pairs: an eligible article whose text (DE, FR and IT agree)
-   refers to another article of the same act (``refs.same_act_references``), where the cited
-   article resolves with ``eligibility.resolve_gold`` and falls in the same split. Per cell the
-   candidate list is shuffled and pairs are taken greedily while neither article is used. A cell
-   with too few disjoint pairs gets fewer cross_ref slots; the shortfall is reported, not hidden.
+   proportion to the quotas. Candidates: an eligible article A whose text (DE, FR and IT agree)
+   refers to another article B of the same act (``refs.same_act_references``), where B resolves
+   with ``eligibility.resolve_gold`` and falls in the same split; an A with more than five
+   distinct references is skipped. Per cell the distinct A articles are shuffled (seeded) and each
+   draws one B at random, while neither article is used. A cell with too few disjoint pairs gets
+   fewer cross_ref slots; the shortfall is reported, not hidden.
 3. **single.** The other articles of the cell are drawn with ``rng.sample`` from the unused
    articles. An article is used at most once in the whole plan, as gold or as secondary gold.
 4. **Order inside a cell.** The first ``quota`` slots (the *final prefix*) already have the final
@@ -63,16 +67,21 @@ from fedlex_bench.benchmark.common import (
     TRAP_FINAL,
     TRAP_LANG_FINAL,
     TRAP_TYPES,
+    TWINS_PATH,
     act_key,
     draft_count,
     id_key,
     largest_remainder,
     load_corpus,
     read_jsonl,
+    sha256_file,
+    slots_sha256,
     split_of,
     write_jsonl,
 )
 from fedlex_bench.benchmark.refs import same_act_references
+from fedlex_bench.benchmark.twins import THRESHOLD as TWIN_THRESHOLD
+from fedlex_bench.benchmark.twins import find_twins, twin_records
 from fedlex_bench.chunk import ARTICLES_PARQUET
 from fedlex_bench.eligibility import benchmark_eligible, resolve_gold, retrieval_eligible
 
@@ -92,6 +101,8 @@ class PlanResult:
     slots: list[dict]
     cross_report: list[dict] = field(default_factory=list)
     pool_report: list[dict] = field(default_factory=list)
+    twins: dict[str, tuple[str, float]] = field(default_factory=dict)
+    twin_report: list[dict] = field(default_factory=list)
     seed: int = SEED
 
 
@@ -171,35 +182,80 @@ def spread(n: int, k: int) -> set[int]:
 # ------------------------------------------------------------------ candidate pairs
 
 
-def candidate_pairs(df: pd.DataFrame, pool_ids: list[str]) -> dict[Cell, list[tuple[str, str]]]:
-    """Per cell, the (referencing, referenced) pairs of eligible articles of one split. The
-    reference must be found in DE, FR and IT alike."""
+MAX_DISTINCT_REFERENCES = 5
+
+
+def candidate_pairs(df: pd.DataFrame, pool_ids: list[str]) -> dict[Cell, dict[str, list[str]]]:
+    """Per cell, ``{referencing article A: [articles B it cites]}`` among the eligible articles of
+    one split. A reference must be found in DE, FR and IT alike. An article with more than five
+    distinct same-act references is skipped as A: it is unclear which one the question needs."""
     pool = set(pool_ids)
     known = set(df["article_id"])
     live = retrieval_eligible(df)
     live = live[live["article_id"].isin(pool)]
     texts = {(r.article_id, r.lang): r.text for r in live.itertuples(index=False)}
-    pairs: dict[Cell, list[tuple[str, str]]] = {cell: [] for cell in CELLS}
+    pairs: dict[Cell, dict[str, list[str]]] = {cell: {} for cell in CELLS}
     for aid in pool_ids:
         sr = aid.partition(":")[0]
-        per_lang = [
-            {f"{sr}:{n}" for n in same_act_references(texts[(aid, lang)], lang)}
-            for lang in CORPUS_LANGS
-        ]
+        found = [same_act_references(texts[(aid, lang)], lang) for lang in CORPUS_LANGS]
+        if max(len(f) for f in found) > MAX_DISTINCT_REFERENCES:
+            continue
+        per_lang = [{f"{sr}:{n}" for n in f} for f in found]
+        cited: list[str] = []
         for target in sorted(set.intersection(*per_lang), key=id_key):
             gold = resolve_gold(target, pool, known)
             if gold is None or gold == aid or split_of(gold) != split_of(aid):
                 continue
-            if (sr, split_of(aid)) in pairs:
-                pairs[(sr, split_of(aid))].append((aid, gold))
+            cited.append(gold)
+        cell = (sr, split_of(aid))
+        if cited and cell in pairs:
+            pairs[cell][aid] = cited
     return pairs
+
+
+def draw_pairs(
+    candidates: dict[str, list[str]], want: int, rng: random.Random, used: set[str]
+) -> list[tuple[str, str]]:
+    """Up to ``want`` disjoint (A, B) pairs: the distinct A articles are shuffled (seeded) and each
+    gets one B drawn at random from the articles it cites that are still unused."""
+    order = sorted(candidates, key=id_key)
+    rng.shuffle(order)
+    chosen: list[tuple[str, str]] = []
+    for a in order:
+        if len(chosen) == want:
+            break
+        if a in used:
+            continue
+        options = [b for b in candidates[a] if b not in used and b != a]
+        if not options:
+            continue
+        b = rng.choice(options)
+        chosen.append((a, b))
+        used.update((a, b))
+    return chosen
 
 
 # ------------------------------------------------------------------ the plan
 
 
+def find_pool_twins(df: pd.DataFrame, pool_ids: list[str]) -> dict[str, tuple[str, float]]:
+    """Twins among the pool articles, by the German text (see ``twins.py``)."""
+    wanted = set(pool_ids)
+    de = df[(df["lang"] == "de") & df["article_id"].isin(wanted)]
+    return find_twins(dict(zip(de["article_id"], de["text"], strict=True)), TWIN_THRESHOLD)
+
+
 def build_plan(df: pd.DataFrame, seed: int = SEED) -> PlanResult:
-    pool_ids = sorted(benchmark_eligible(df)["article_id"], key=id_key)
+    eligible = sorted(benchmark_eligible(df)["article_id"], key=id_key)
+    twins_found = find_pool_twins(df, eligible)
+    pool_ids = [a for a in eligible if a not in twins_found]
+    twin_report = []
+    for act in ACT_QUOTA:
+        before = sum(1 for a in eligible if a.partition(":")[0] == act)
+        removed = sum(1 for a in twins_found if a.partition(":")[0] == act)
+        twin_report.append(
+            {"act": act, "pool_before": before, "removed": removed, "pool_after": before - removed}
+        )
     cell_articles: dict[Cell, list[str]] = {cell: [] for cell in CELLS}
     for aid in pool_ids:
         cell = (aid.partition(":")[0], split_of(aid))
@@ -225,17 +281,9 @@ def build_plan(df: pd.DataFrame, seed: int = SEED) -> PlanResult:
     for cell in CELLS:
         act, split = cell
         q, nd = quotas[cell], drafts[cell]
-        pairs = list(pairs_by_cell[cell])
-        rng.shuffle(pairs)
+        candidates = pairs_by_cell[cell]
         want = min(nd, draft_count(cross_final[cell]))
-        chosen: list[tuple[str, str]] = []
-        for a, b in pairs:
-            if len(chosen) == want:
-                break
-            if a in used or b in used:
-                continue
-            chosen.append((a, b))
-            used.update((a, b))
+        chosen = draw_pairs(candidates, want, rng, used)
         free = [a for a in cell_articles[cell] if a not in used]
         n_single = nd - len(chosen)
         if len(free) < n_single:
@@ -276,7 +324,8 @@ def build_plan(df: pd.DataFrame, seed: int = SEED) -> PlanResult:
                 "cell": cell,
                 "act": act,
                 "split": split,
-                "candidate_pairs": len(pairs),
+                "candidate_articles": len(candidates),
+                "candidate_pairs": sum(len(v) for v in candidates.values()),
                 "final_target": cross_final[cell],
                 "draft_target": want,
                 "draft_slots": len(chosen),
@@ -304,7 +353,14 @@ def build_plan(df: pd.DataFrame, seed: int = SEED) -> PlanResult:
     _mark_pilot(slots)
     for slot in slots:
         slot.pop("_final", None)
-    return PlanResult(slots=slots, cross_report=cross_report, pool_report=pool_report, seed=seed)
+    return PlanResult(
+        slots=slots,
+        cross_report=cross_report,
+        pool_report=pool_report,
+        twins=twins_found,
+        twin_report=twin_report,
+        seed=seed,
+    )
 
 
 def _cell_languages(
@@ -583,6 +639,15 @@ def summary_text(result: PlanResult) -> str:
         + f"; total {sum(by_act.values())} of {CROSS_REF_FINAL}; shortfall {total_short}"
     )
     out.append("")
+    out.append("twins: articles removed as gold candidates (DE 5-gram Jaccard >= 0.7)")
+    out.append(f"  {'act':<10}{'eligible':>9}{'removed':>9}{'pool':>7}")
+    for row in result.twin_report:
+        out.append(
+            f"  {row['act']:<10}{row['pool_before']:>9}{row['removed']:>9}{row['pool_after']:>7}"
+        )
+    total_removed = sum(r["removed"] for r in result.twin_report)
+    out.append(f"  removed in total: {total_removed}")
+    out.append("")
     out.append("pool check (articles in the pool vs articles used by the plan)")
     for row in result.pool_report:
         out.append(f"  {row['act']:<10}pool {row['pool']:>5}  used {row['used']:>4}")
@@ -595,7 +660,11 @@ def run(argv: list[str] | None = None, corpus: pd.DataFrame | None = None) -> in
     )
     ap.add_argument("--parquet", type=Path, default=ARTICLES_PARQUET)
     ap.add_argument("--out", type=Path, default=SLOTS_PATH)
+    ap.add_argument("--twins-out", type=Path, default=TWINS_PATH)
     ap.add_argument("--seed", type=int, default=SEED)
+    ap.add_argument(
+        "--force", action="store_true", help="overwrite an existing slots file that differs"
+    )
     args = ap.parse_args(argv)
     df = corpus if corpus is not None else load_corpus(args.parquet)
     try:
@@ -603,7 +672,17 @@ def run(argv: list[str] | None = None, corpus: pd.DataFrame | None = None) -> in
     except PlanError as exc:
         print(f"STOP: {exc}")
         return 2
+    new_sha = slots_sha256(result.slots)
+    if args.out.exists() and sha256_file(args.out) != new_sha and not args.force:
+        print(
+            f"REFUSED: {args.out} exists and differs from the new plan "
+            f"(existing sha256 {sha256_file(args.out)}, new {new_sha}). Drafts and briefs refer to "
+            "the existing plan; use --force to replace it."
+        )
+        return 1
     sha = write_slots(result.slots, args.out)
+    write_jsonl(args.twins_out, twin_records(result.twins))
     print(summary_text(result))
     print(f"{args.out.name} sha256 {sha}")
+    print(f"{args.twins_out.name}: {len(result.twins)} twin articles")
     return 0

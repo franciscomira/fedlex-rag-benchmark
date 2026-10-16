@@ -70,6 +70,23 @@ def traps(items):
     return [i for i in items if i["is_trap"]]
 
 
+def singles(items, act=None):
+    return [
+        i
+        for i in answerable(items)
+        if i["qtype"] == "single" and (act is None or i["source_act"] == act)
+    ]
+
+
+def crosses(items):
+    return [i for i in answerable(items) if i["qtype"] == "cross_ref"]
+
+
+def with_rank(items):
+    """An answerable item whose German BM25 rank exists (a shared token with its article)."""
+    return next(i for i in answerable(items) if i["bm25_rank"]["de"] is not None)
+
+
 def only(report, code):
     assert report.codes == {code}, [str(e) for e in report.errors]
 
@@ -209,7 +226,7 @@ def test_gold_must_exist_in_all_three_languages(items, corpus, indexes):
 
 
 def test_gold_must_be_benchmark_eligible(items, corpus, indexes):
-    it = next(i for i in answerable(items) if i["source_act"] == "220")
+    it = singles(items, "220")[0]
     for bad in ("220:r1", "220:s1", "220:u1/1"):  # repealed, too short, transitional
         it["gold_article_ids"] = [bad]
         it["gold_facts"][0]["article_id"] = bad
@@ -507,24 +524,62 @@ def test_freeze_accepts_human_names(items, corpus, indexes):
 
 
 def test_stored_ranks_must_match_the_recomputed_ones(items, corpus, indexes):
-    it = answerable(items)[0]
+    it = next(i for i in answerable(items) if i["query_lang"] != "en" and i["bm25_rank"]["de"])
     it["bm25_rank"]["de"] += 1
+    if it["query_lang"] == "de":
+        it["lexical_overlap"] += 1  # keep the item consistent: only the recomputation can tell
     report = check(items, corpus, indexes, check_ranks=True)
     only(report, "rank_mismatch")
-    it["bm25_rank"]["de"] -= 1
-    it["lexical_overlap"] += 1
+    assert it["id"] in str(report.errors[0])
+
+
+def test_a_null_rank_must_stay_null_and_a_rank_must_not_be_null(items, corpus, indexes):
+    it = next(i for i in answerable(items) if i["bm25_rank"]["fr"] is None)
+    it["bm25_rank"]["fr"] = 4
+    only(check(items, corpus, indexes, check_ranks=True), "rank_mismatch")
+    it["bm25_rank"]["fr"] = None
+    other = with_rank(items)
+    other["bm25_rank"]["it"] = None
     only(check(items, corpus, indexes, check_ranks=True), "rank_mismatch")
 
 
+def test_lexical_overlap_is_the_own_language_rank_and_null_for_english(items, corpus, indexes):
+    en = next(i for i in answerable(items) if i["query_lang"] == "en")
+    assert en["lexical_overlap"] is None
+    en["lexical_overlap"] = 3
+    assert "answerable_fields" in check(items, corpus, indexes).codes
+    en["lexical_overlap"] = None
+    de = next(i for i in answerable(items) if i["query_lang"] == "de")
+    de["lexical_overlap"] = 9 if de["bm25_rank"]["de"] != 9 else 8
+    assert "answerable_fields" in check(items, corpus, indexes).codes
+
+
+def test_null_ranks_are_valid_schema(items, corpus, indexes):
+    assert any(i["bm25_rank"]["de"] is None for i in answerable(items))
+    assert any(i["bm25_rank"]["de"] is not None for i in answerable(items))
+    assert check(items, corpus, indexes, check_ranks=True).errors == []
+
+
 def test_rank_check_can_be_skipped_for_speed(items, corpus, indexes):
-    answerable(items)[0]["bm25_rank"]["de"] += 1
-    assert check(items, corpus, indexes, check_ranks=False).errors == []
+    it = with_rank(items)
+    it["bm25_rank"]["de"] += 1
+    assert "rank_mismatch" not in check(items, corpus, indexes, check_ranks=False).codes
+    assert "rank_mismatch" in check(items, corpus, indexes, check_ranks=True).codes
+
+
+def test_freeze_always_recomputes_the_ranks(items, corpus, indexes):
+    for it in items:
+        it.update(review_status="accepted", reviewed_by="Francisco Mira", reviewed_at="2026-10-20")
+    with_rank(items)["bm25_rank"]["de"] += 1
+    report = check(items, corpus, indexes, freeze=True, check_ranks=False)
+    assert "rank_mismatch" in report.codes
 
 
 def test_warning_when_same_language_rank_one_is_too_common(items, corpus, indexes):
     own = [i for i in answerable(items) if i["query_lang"] != "en"]
     for it in own[: int(len(own) * 0.5)]:
         it["bm25_rank"][it["query_lang"]] = 1
+        it["lexical_overlap"] = 1
     report = check(items, corpus, indexes)
     assert "warn_same_lang_rank1" in report.warning_codes and report.errors == []
 
@@ -533,14 +588,153 @@ def test_no_rank_one_warning_below_the_limit(items, corpus, indexes):
     for it in answerable(items):
         for lang in it["bm25_rank"]:
             it["bm25_rank"][lang] = 7
+        it["lexical_overlap"] = None if it["query_lang"] == "en" else 7
     assert "warn_same_lang_rank1" not in check(items, corpus, indexes).warning_codes
 
 
 def test_warning_for_small_language_pair_cells(items, corpus, indexes):
+    assert not [w for w in check(items, corpus, indexes).warnings if w.check == "warn_pair_cell"]
+    cell = [i for i in answerable(items) if i["query_lang"] == "de" and i["source_lang"] == "it"]
+    for it in cell[3:]:
+        it["source_lang"] = "fr"  # leave 3 items in the (de, it) cell
     report = check(items, corpus, indexes)
     cells = [w for w in report.warnings if w.check == "warn_pair_cell"]
-    assert len(cells) >= 4  # the same-language control cells are about 9 items each
-    assert all("fewer than 20" in w.message for w in cells)
+    assert [w.item_id for w in cells] == ["query=de source=it"]
+    assert "fewer than 5" in cells[0].message
+
+
+def test_warning_when_the_dev_language_counts_are_uneven(items, corpus, indexes):
+    dev = [i for i in answerable(items) if i["split"] == "dev"]
+    for n, it in enumerate(dev):  # an even spread first: 10 per language
+        it["query_lang"] = ("en", "de", "fr", "it")[n % 4]
+    assert "warn_dev_lang" not in check(items, corpus, indexes).warning_codes
+    for it in dev[:6]:
+        it["query_lang"] = "en"
+    report = check(items, corpus, indexes)
+    assert "warn_dev_lang" in report.warning_codes
+    assert any("en=" in w.message for w in report.warnings if w.check == "warn_dev_lang")
+
+
+# ------------------------------------------------------------------ completeness of the set
+
+
+def test_total_counts_of_answerable_items_and_traps(items, corpus, indexes):
+    items.remove(singles(items, "220")[0])
+    report = check(items, corpus, indexes)
+    assert "total_count" in report.codes
+    assert any("149" in str(e) for e in report.errors)
+    assert "total_count" not in check(items, corpus, indexes, partial=True).codes
+
+
+def test_trap_total_and_trap_languages(items, corpus, indexes):
+    removed = traps(items)[0]
+    items.remove(removed)
+    codes = check(items, corpus, indexes).codes
+    assert {"total_count", "trap_lang_count"} <= codes
+    # right total, wrong language mix: the copy has another language than the removed trap
+    extra = copy.deepcopy(next(t for t in traps(items) if t["query_lang"] != removed["query_lang"]))
+    extra["id"] = "v1-9999"
+    extra["question"] = words("another trap") + "?"
+    items.append(extra)
+    codes = check(items, corpus, indexes).codes
+    assert "trap_lang_count" in codes and "total_count" not in codes
+
+
+def test_dev_test_counts_of_the_answerable_items(items, corpus, indexes):
+    # one dev item less, one test item more: the total stays 150
+    dev_item = next(i for i in singles(items, "220") if i["split"] == "dev")
+    items.remove(dev_item)
+    facts = validate.corpus_facts(corpus)
+    used = {g for i in items for g in i["gold_article_ids"]}
+    free = next(
+        a
+        for a in sorted(facts.pool)
+        if a.startswith("220:") and split_of(a) == "test" and a not in used
+    )
+    extra = copy.deepcopy(singles(items, "220")[0])
+    extra.update(id="v1-9998", split="test", gold_article_ids=[free], question=words("extra") + "?")
+    extra["gold_facts"] = [{"text": "A fact.", "article_id": free}]
+    items.append(extra)
+    codes = check(items, corpus, indexes).codes
+    assert "split_count" in codes and "total_count" not in codes
+
+
+def test_cross_ref_count_within_one(items, corpus, indexes):
+    def demote(item):
+        item["qtype"] = "single"
+        item["gold_article_ids"] = item["gold_article_ids"][:1]
+        item["gold_facts"] = item["gold_facts"][:1]
+
+    crosses_ = crosses(items)
+    assert len(crosses_) == 22
+    demote(crosses_[0])
+    assert "cross_ref_count" not in check(items, corpus, indexes).codes  # 21: within tolerance
+    demote(crosses_[1])
+    assert "cross_ref_count" in check(items, corpus, indexes).codes  # 20
+    assert "cross_ref_count" not in check(items, corpus, indexes, partial=True).codes
+
+
+def test_a_cross_ref_secondary_must_be_in_the_same_act(items, corpus, indexes):
+    cross = crosses(items)[0]
+    primary_act = cross["source_act"]
+    other = next(
+        a
+        for a in sorted(validate.corpus_facts(corpus).pool)
+        if not a.startswith(primary_act + ":") and split_of(a) == cross["split"]
+    )
+    cross["gold_article_ids"][1] = other
+    cross["gold_facts"][1]["article_id"] = other
+    report = check(items, corpus, indexes, partial=True)
+    assert "cross_ref_act" in report.codes
+
+
+def test_cross_ref_secondary_must_pass_every_gold_check(items, corpus, indexes):
+    cross = crosses(items)[0]
+    cross["gold_article_ids"][1] = f"{cross['source_act']}:r1"  # repealed: not eligible
+    cross["gold_facts"][1]["article_id"] = f"{cross['source_act']}:r1"
+    codes = check(items, corpus, indexes, partial=True).codes
+    assert codes & {"gold_ineligible", "gold_missing"}
+    cross["gold_article_ids"][1] = cross["gold_article_ids"][0]  # the same article twice
+    assert "gold_count" in check(items, corpus, indexes, partial=True).codes
+
+
+def test_a_cross_ref_secondary_may_not_be_used_by_another_item(items, corpus, indexes):
+    a, b = crosses(items)[:2]
+    b["gold_article_ids"][1] = a["gold_article_ids"][1]
+    b["gold_facts"][1]["article_id"] = a["gold_article_ids"][1]
+    report = check(items, corpus, indexes, partial=True)
+    assert "gold_reused" in report.codes
+
+
+def test_translation_parent_must_be_single_and_translations_are_ranked(items, corpus, indexes):
+    cross = crosses(items)[0]
+    t = make_translation(items, cross, "v1-9001")
+    report = check(items, corpus, indexes)
+    assert "translation" in report.codes and any("single" in str(e) for e in report.errors)
+    items.remove(t)
+    single = next(i for i in singles(items) if i["split"] == "test")
+    t = make_translation(items, single, "v1-9002")
+    ranks, overlap = compute_ranks(t["question"], t["gold_article_ids"], t["query_lang"], indexes)
+    t["bm25_rank"], t["lexical_overlap"] = ranks, overlap
+    assert check(items, corpus, indexes, check_ranks=True).errors == []
+    t["bm25_rank"] = {"de": 2, "fr": 2, "it": 2}  # a wrong rank of a translation is found too
+    t["lexical_overlap"] = None if t["query_lang"] == "en" else 2
+    assert "rank_mismatch" in check(items, corpus, indexes, check_ranks=True).codes
+
+
+def test_a_question_with_a_unicode_line_separator_is_read_correctly(tmp_path, items, corpus):
+    victim = singles(items)[0]
+    ranks, overlap = compute_ranks(
+        victim["question"].rstrip("?") + "\u2028 mit Zeilentrenner?",
+        victim["gold_article_ids"],
+        victim["query_lang"],
+        build_indexes(corpus),
+    )
+    victim["question"] = victim["question"].rstrip("?") + "\u2028 mit Zeilentrenner?"
+    victim["bm25_rank"], victim["lexical_overlap"] = ranks, overlap
+    write_dir(tmp_path, items)
+    report = validate.validate_dir(tmp_path, corpus, check_ranks=True)
+    assert report.errors == [], [str(e) for e in report.errors]
 
 
 # ------------------------------------------------------------------ files and command
@@ -588,19 +782,20 @@ def test_command_exit_codes_and_output(tmp_path, items, corpus, capsys):
 
 def test_command_freeze_flag(tmp_path, items, corpus, capsys):
     write_dir(tmp_path, items)
-    assert (
-        validate.run(["--dir", str(tmp_path), "--skip-rank-check", "--freeze"], corpus=corpus) == 1
-    )
+    assert validate.run(["--dir", str(tmp_path), "--freeze"], corpus=corpus) == 1
     assert "freeze_status" in capsys.readouterr().out
     for it in items:
         it.update(review_status="accepted", reviewed_by="Francisco Mira", reviewed_at="2026-10-20")
     write_dir(tmp_path / "ok", items)
-    assert (
-        validate.run(
-            ["--dir", str(tmp_path / "ok"), "--skip-rank-check", "--freeze"], corpus=corpus
-        )
-        == 0
-    )
+    assert validate.run(["--dir", str(tmp_path / "ok"), "--freeze"], corpus=corpus) == 0
+
+
+def test_command_rejects_skip_rank_check_with_freeze(tmp_path, items, corpus, capsys):
+    write_dir(tmp_path, items)
+    with pytest.raises(SystemExit) as exc:
+        validate.run(["--dir", str(tmp_path), "--freeze", "--skip-rank-check"], corpus=corpus)
+    assert exc.value.code == 2
+    assert "always recomputes" in capsys.readouterr().err
 
 
 def test_command_partial_flag(tmp_path, items, corpus):

@@ -54,29 +54,48 @@ def _row(sr: str, number: str, lang: str, text: str, **kw) -> dict:
     return row
 
 
-def make_corpus(references: bool = True, sizes: dict[str, int] | None = None) -> pd.DataFrame:
+def make_corpus(
+    references: bool = True,
+    sizes: dict[str, int] | None = None,
+    twins: list[tuple[str, int, int]] | None = None,
+    extra_refs: dict[str, list[int]] | None = None,
+) -> pd.DataFrame:
     """Eligible articles ``1..n`` per act in DE, FR and IT. Every even article i > 2 refers to
     article i-1 of the same act in all three languages. Extra ids that must never be chosen:
-    ``<sr>:r1`` (repealed), ``<sr>:s1`` (only 60 characters) and ``<sr>:u1/1`` (transitional)."""
+    ``<sr>:r1`` (repealed), ``<sr>:s1`` (only 60 characters) and ``<sr>:u1/1`` (transitional).
+
+    ``twins`` is a list of ``(sr, i, j)``: article j gets exactly the text of article i (in every
+    language, the ``inhalt`` token aside), so the pair is a twin pair. ``extra_refs`` maps
+    ``"<sr>:<i>"`` to article numbers that article i cites in addition."""
     rows: list[dict] = []
     for sr, n in (sizes or SIZES).items():
         for i in range(1, n + 1):
             for lang in LANGS:
-                text = f"{lang} wortlaut {sr} nummer {i} " + f"inhalt{i} " * 40
+                text = f"{lang} wortlaut {sr} nummer {i} inhalt{i} " + words(f"{sr}/{i}/{lang}", 40)
                 if references and i > 2 and i % 2 == 0:
-                    text += REF[lang].format(n=i - 1)
+                    text += " " + REF[lang].format(n=i - 1)
+                for number in (extra_refs or {}).get(f"{sr}:{i}", []):
+                    text += " " + REF[lang].format(n=number)
                 rows.append(_row(sr, str(i), lang, text))
         for lang in LANGS:
             rows.append(_row(sr, "r1", lang, "", is_repealed=True))
             rows.append(_row(sr, "s1", lang, "kurz " * 12))
             rows.append(_row(sr, "u1/1", lang, "uebergang " * 60, kind="transitional"))
-    return pd.DataFrame(rows, columns=COLUMNS)
+    df = pd.DataFrame(rows, columns=COLUMNS)
+    for sr, i, j in twins or []:
+        for lang in LANGS:
+            source = df.loc[(df["article_id"] == f"{sr}:{i}") & (df["lang"] == lang), "text"].iloc[
+                0
+            ]
+            df.loc[(df["article_id"] == f"{sr}:{j}") & (df["lang"] == lang), "text"] = source
+    return df
 
 
 def make_valid_items(df: pd.DataFrame) -> list[dict]:
-    """A full, valid benchmark (150 answerable + 20 traps) over ``df``: gold ids taken by code
-    from the corpus, splits from the rule, ranks from the BM25 module, the language balance
-    38/37/38/37, source languages as in the spec, act quotas exactly as in the table."""
+    """A full, valid benchmark (150 answerable incl. 22 cross_ref, plus 20 traps) over ``df``:
+    gold ids taken by code from the corpus, splits from the rule, ranks from the BM25 module, the
+    language balance 38/37/38/37, source languages as in the spec, act quotas exactly as in the
+    table, dev 40 / test 110."""
     from fedlex_bench.benchmark.bm25 import build_indexes, compute_ranks
     from fedlex_bench.benchmark.common import (
         DEV_ANSWERABLE,
@@ -86,13 +105,23 @@ def make_valid_items(df: pd.DataFrame) -> list[dict]:
         TRAP_TYPES,
         largest_remainder,
     )
+    from fedlex_bench.benchmark.plan import candidate_pairs, cross_ref_targets
     from fedlex_bench.eligibility import benchmark_eligible
 
-    pool = list(benchmark_eligible(df)["article_id"])
+    pool = sorted(
+        benchmark_eligible(df)["article_id"],
+        key=lambda a: (
+            a.partition(":")[0],
+            int(a.partition(":")[2]) if a.partition(":")[2].isdigit() else 10**9,
+            a,
+        ),
+    )
     indexes = build_indexes(df)
     by_cell: dict[tuple[str, str], list[str]] = {}
     for aid in pool:
         by_cell.setdefault((aid.partition(":")[0], split_of(aid)), []).append(aid)
+    pairs = candidate_pairs(df, pool)
+    cross_target = cross_ref_targets()
 
     dev_by_act = largest_remainder(DEV_ANSWERABLE, ACT_QUOTA, order=list(ACT_QUOTA))
     langs_cycle = [lang for lang in QUERY_LANGS for _ in range(LANG_FINAL[lang])]
@@ -102,9 +131,28 @@ def make_valid_items(df: pd.DataFrame) -> list[dict]:
     counters = {lang: 0 for lang in QUERY_LANGS}
     items: list[dict] = []
     n = 0
+    used: set[str] = set()
     for act, quota in ACT_QUOTA.items():
         for split, count in (("dev", dev_by_act[act]), ("test", quota - dev_by_act[act])):
-            for gold in by_cell[(act, split)][:count]:
+            cell_golds: list[list[str]] = []
+            for a in sorted(
+                pairs[(act, split)],
+                key=lambda x: int(x.partition(":")[2].rstrip("abcdefghijklmnopqrstuvwxyz") or 0),
+            ):
+                if len(cell_golds) == cross_target[(act, split)]:
+                    break
+                b = next(
+                    (x for x in pairs[(act, split)][a] if x not in used and a not in used), None
+                )
+                if b is not None:
+                    cell_golds.append([a, b])
+                    used.update((a, b))
+            free = [a for a in by_cell[(act, split)] if a not in used]
+            for gold in free[: count - len(cell_golds)]:
+                cell_golds.append([gold])
+                used.add(gold)
+            for golds in cell_golds:
+                gold = golds[0]
                 lang = langs[n]
                 n += 1
                 k = counters[lang]
@@ -116,18 +164,20 @@ def make_valid_items(df: pd.DataFrame) -> list[dict]:
                 else:
                     source = [x for x in LANGS if x != lang][k % 2]
                 question = words(f"{gold}:{lang}") + "?"
-                ranks, overlap = compute_ranks(question, [gold], lang, indexes)
+                if n % 3 == 0:  # a shared token with the primary article: a real BM25 rank
+                    question = f"inhalt{gold.partition(':')[2]} " + question
+                ranks, overlap = compute_ranks(question, golds, lang, indexes)
                 items.append(
                     {
                         "id": "",
                         "split": split,
-                        "qtype": "single",
+                        "qtype": "cross_ref" if len(golds) == 2 else "single",
                         "is_trap": False,
                         "query_lang": lang,
                         "question": question,
                         "source_lang": source,
-                        "gold_article_ids": [gold],
-                        "gold_facts": [{"text": f"Fact for {gold}.", "article_id": gold}],
+                        "gold_article_ids": list(golds),
+                        "gold_facts": [{"text": f"Fact for {g}.", "article_id": g} for g in golds],
                         "source_act": act,
                         "difficulty": ("easy", "medium", "hard")[n % 3],
                         "lexical_overlap": overlap,

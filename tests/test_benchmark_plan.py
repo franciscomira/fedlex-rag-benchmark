@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import random
 from collections import Counter
 
 import pytest
@@ -381,3 +383,132 @@ def test_summary_text_reports_counts_by_cell_and_language(result):
     assert "220" in text and "trap" in text
     for lang in ("en", "de", "fr", "it"):
         assert lang in text
+
+
+# ------------------------------------------------------------------ twins
+
+
+def test_twin_articles_are_never_gold_and_are_reported_per_act():
+    twins = [("220", 10, 30), ("220", 50, 51), ("272", 5, 6)]
+    df = make_corpus(twins=twins)
+    res = plan.build_plan(df)
+    expected = {"220:10", "220:30", "220:50", "220:51", "272:5", "272:6"}
+    assert set(res.twins) == expected
+    assert res.twins["220:10"][0] == "220:30" and res.twins["220:10"][1] == 1.0
+    used = {g for s in res.slots for g in s["gold_article_ids"]}
+    assert not used & expected
+    rows = {r["act"]: r for r in res.twin_report}
+    assert rows["220"]["removed"] == 4 and rows["272"]["removed"] == 2
+    assert rows["210"]["removed"] == 0
+    for row in res.twin_report:
+        assert row["pool_after"] == row["pool_before"] - row["removed"]
+    assert "removed in total: 6" in plan.summary_text(res)
+
+
+def test_a_twin_is_removed_even_as_the_cited_article_of_a_cross_ref():
+    # 220:2k+1 is cited by 220:2k+2 in the fixture; make every cited article of a block a twin
+    twins = [("220", 20, 60), ("220", 22, 62)]
+    df = make_corpus(twins=twins)
+    res = plan.build_plan(df)
+    used = {g for s in res.slots for g in s["gold_article_ids"]}
+    assert not used & {"220:20", "220:60", "220:22", "220:62"}
+    pool = [a for a in sorted(benchmark_eligible(df)["article_id"]) if a not in res.twins]
+    for cell_pairs in plan.candidate_pairs(df, pool).values():
+        for a, bs in cell_pairs.items():
+            assert a not in res.twins and not set(bs) & set(res.twins)
+
+
+def test_the_plan_stops_when_twins_shrink_a_pool_below_twice_its_use():
+    sizes = {**SIZES, "241": 26}
+    twins = [("241", i, i + 1) for i in range(2, 18, 2)]  # 8 pairs: 16 articles removed
+    df = make_corpus(sizes=sizes, twins=twins)
+    assert len(plan.find_pool_twins(df, sorted(benchmark_eligible(df)["article_id"]))) == 16
+    with pytest.raises(plan.PlanError, match="241"):
+        plan.build_plan(df)
+
+
+def test_twin_records_are_written_by_the_command(tmp_path):
+    df = make_corpus(twins=[("220", 10, 30)])
+    out, twins_out = tmp_path / "slots.jsonl", tmp_path / "twins.jsonl"
+    assert plan.run(["--out", str(out), "--twins-out", str(twins_out)], corpus=df) == 0
+    rows = [json.loads(line) for line in twins_out.read_text(encoding="utf-8").splitlines()]
+    assert rows == [
+        {"article_id": "220:10", "jaccard": 1.0, "twin_id": "220:30"},
+        {"article_id": "220:30", "jaccard": 1.0, "twin_id": "220:10"},
+    ]
+
+
+# ------------------------------------------------------------------ cross_ref sampling
+
+
+def test_draw_pairs_takes_distinct_a_articles_and_one_b_each():
+    candidates = {
+        "220:2": ["220:1", "220:3", "220:5"],
+        "220:4": ["220:1", "220:3"],
+        "220:6": ["220:7"],
+    }
+    for seed in range(20):
+        used: set[str] = set()
+        pairs = plan.draw_pairs(candidates, 3, random.Random(seed), used)
+        assert sorted(a for a, _ in pairs) == ["220:2", "220:4", "220:6"]  # one pair per A
+        assert len({b for _, b in pairs}) == 3  # and no B twice
+        assert used == {x for p in pairs for x in p}
+        for a, b in pairs:
+            assert b in candidates[a]
+
+
+def test_draw_pairs_respects_used_articles_and_the_wanted_count():
+    candidates = {"220:2": ["220:1"], "220:4": ["220:3"], "220:6": ["220:5"]}
+    used = {"220:3"}
+    pairs = plan.draw_pairs(candidates, 5, random.Random(1), used)
+    assert sorted(pairs) == [("220:2", "220:1"), ("220:6", "220:5")]
+    assert plan.draw_pairs(candidates, 1, random.Random(1), set()) != []
+    assert len(plan.draw_pairs(candidates, 1, random.Random(1), set())) == 1
+
+
+def test_draw_pairs_is_seeded_and_does_not_depend_on_dict_order():
+    candidates = {f"220:{2 * i}": [f"220:{2 * i - 1}", f"220:{2 * i + 101}"] for i in range(1, 12)}
+    a = plan.draw_pairs(candidates, 6, random.Random(5), set())
+    b = plan.draw_pairs(dict(reversed(list(candidates.items()))), 6, random.Random(5), set())
+    assert a == b
+
+
+def test_an_article_with_more_than_five_distinct_references_is_not_an_a_article():
+    base = make_corpus()
+    from fedlex_bench.benchmark.common import split_of
+
+    odd = [a for a in range(101, 160, 2) if split_of(f"220:{a}") == "test"]
+    cited = [n for n in range(11, 60) if split_of(f"220:{n}") == "test" and n % 2 == 1][:6]
+    five, six = odd[0], odd[1]
+    df = make_corpus(extra_refs={f"220:{five}": cited[:5], f"220:{six}": cited[:6]})
+    pool = sorted(benchmark_eligible(df)["article_id"])
+    found = plan.candidate_pairs(df, pool)[("220", "test")]
+    assert f"220:{five}" in found and f"220:{six}" not in found
+    assert set(found[f"220:{five}"]) == {f"220:{n}" for n in cited[:5]}
+    assert base is not None
+
+
+# ------------------------------------------------------------------ no silent overwrite
+
+
+def test_command_refuses_to_replace_a_different_plan_without_force(tmp_path, corpus, capsys):
+    out = tmp_path / "slots.jsonl"
+    twins_out = tmp_path / "twins.jsonl"
+    out.write_text('{"slot_id": "s-0001"}\n', encoding="utf-8")
+    before = out.read_bytes()
+    code = plan.run(["--out", str(out), "--twins-out", str(twins_out)], corpus=corpus)
+    assert code == 1 and out.read_bytes() == before and not twins_out.exists()
+    text = capsys.readouterr().out
+    assert "REFUSED" in text and "--force" in text
+    assert (
+        plan.run(["--out", str(out), "--twins-out", str(twins_out), "--force"], corpus=corpus) == 0
+    )
+    assert out.read_bytes() != before and twins_out.exists()
+
+
+def test_command_rewrites_an_identical_plan_without_force(tmp_path, corpus, slots):
+    out = tmp_path / "slots.jsonl"
+    plan.write_slots(slots, out)
+    first = out.read_bytes()
+    code = plan.run(["--out", str(out), "--twins-out", str(tmp_path / "t.jsonl")], corpus=corpus)
+    assert code == 0 and out.read_bytes() == first

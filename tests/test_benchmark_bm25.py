@@ -195,23 +195,41 @@ def test_compute_ranks_returns_one_rank_per_language_and_the_overlap():
     indexes = build_indexes(_frame())
     ranks, overlap = compute_ranks("Verjährung", ["220:3"], "de", indexes)
     assert set(ranks) == {"de", "fr", "it"} and ranks["de"] == 1
-    assert ranks["fr"] > 1 and ranks["it"] > 1  # cross-lingual: the German word is unknown there
-    assert overlap == ranks["de"]
+    # cross-lingual: the German word is unknown in the French and Italian indexes, the gold
+    # article scores 0 there, and a zero score is "no rank" (null), not a rank at the end
+    assert ranks["fr"] is None and ranks["it"] is None
+    assert overlap == 1
 
 
-def test_lexical_overlap_is_the_own_language_rank_and_the_minimum_for_english():
+def test_lexical_overlap_is_the_own_language_rank_and_null_for_english():
     ranks = {"de": 7, "fr": 2, "it": 30}
     assert lexical_overlap(ranks, "de") == 7
     assert lexical_overlap(ranks, "fr") == 2
     assert lexical_overlap(ranks, "it") == 30
-    assert lexical_overlap(ranks, "en") == 2  # best index for English
+    assert lexical_overlap(ranks, "en") is None  # n/a: an English query has no own index
+    assert lexical_overlap({"de": None, "fr": 2, "it": 3}, "de") is None
 
 
-def test_compute_ranks_for_english_question_uses_the_best_index():
+def test_english_question_keeps_all_three_ranks_but_no_lexical_overlap():
     indexes = build_indexes(_frame())
     ranks, overlap = compute_ranks("Prescrizione", ["220:3"], "en", indexes)
-    assert ranks["it"] == 1
-    assert overlap == min(ranks.values()) == 1
+    assert ranks == {"de": None, "fr": None, "it": 1}
+    assert overlap is None
+
+
+def test_a_gold_article_with_score_zero_has_no_rank_even_when_it_would_sort_first():
+    index = Bm25Index({"a": "alpha", "b": "beta"})
+    assert index.rank("zzz", ["a"]) == 1  # article order among the zero scores
+    assert index.rank_scored("zzz", ["a"]) is None
+    assert index.rank_scored("beta", ["b"]) == 1
+    assert index.rank_scored("beta", ["a"]) is None
+
+
+def test_rank_scored_uses_the_best_scoring_gold_article():
+    index = Bm25Index({"a": "alpha", "b": "beta", "c": "beta gamma"})
+    assert index.rank_scored("beta", ["a", "c"]) == index.rank("beta", ["c"])
+    assert index.rank_scored("beta", ["a", "b"]) == 1
+    assert index.rank_scored("zzz", ["a", "b"]) is None
 
 
 def test_compute_ranks_cross_reference_uses_best_gold_article():

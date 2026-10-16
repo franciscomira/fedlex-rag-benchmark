@@ -11,6 +11,9 @@
   The tie rule is deterministic and applies to the many zero-score documents of a cross-lingual
   query: they follow in article order. The rank of an item is the best (smallest) rank of its gold
   articles.
+- A gold article that scores 0 (no shared token) has **no rank**: ``rank_scored`` returns
+  ``None`` and ``bm25_rank[lang]`` is null. ``lexical_overlap`` is the rank in the question's own
+  language index (null if that rank is null) and null for English questions (n/a).
 - Index: every retrieval-eligible article of one language, one document per article, text of
   ``title + "\\n" + text``.
 
@@ -114,6 +117,22 @@ class Bm25Index:
         assert best is not None
         return best
 
+    def rank_scored(self, query: str, gold_ids: Iterable[str]) -> int | None:
+        """Like :meth:`rank`, but ``None`` when no gold article has a positive score. A zero score
+        means the question shares no token with the article: there is no rank to report, and the
+        article-order position of a zero-score document would be an artefact."""
+        gold = list(gold_ids)
+        scores = self.scores(query)
+        if not any(g in scores for g in gold if g in self._ordinal):
+            for g in gold:
+                if g not in self._ordinal:
+                    raise KeyError(g)
+            if not gold:
+                raise ValueError("rank_scored() needs at least one gold id")
+            return None
+        scored = [g for g in gold if g in scores]
+        return self.rank(query, scored)
+
 
 def _count_below(sorted_values: list[int], value: int) -> int:
     lo, hi = 0, len(sorted_values)
@@ -137,10 +156,11 @@ def build_indexes(df: pd.DataFrame) -> dict[str, Bm25Index]:
     return out
 
 
-def lexical_overlap(ranks: Mapping[str, int], query_lang: str) -> int:
-    """``bm25_rank`` of the question's own language; for English the best of the three indexes."""
+def lexical_overlap(ranks: Mapping[str, int | None], query_lang: str) -> int | None:
+    """``bm25_rank`` of the question's own language index (``None`` if that rank is null). For an
+    English question there is no own index: ``None`` (n/a); the three ranks are still stored."""
     if query_lang == "en":
-        return min(ranks[lang] for lang in CORPUS_LANGS)
+        return None
     return ranks[query_lang]
 
 
@@ -149,8 +169,9 @@ def compute_ranks(
     gold_ids: Iterable[str],
     query_lang: str,
     indexes: Mapping[str, Bm25Index],
-) -> tuple[dict[str, int], int]:
-    """``(bm25_rank per language, lexical_overlap)`` of a question against its gold articles."""
+) -> tuple[dict[str, int | None], int | None]:
+    """``(bm25_rank per language, lexical_overlap)`` of a question against its gold articles. A
+    rank is ``None`` where the best gold article scores 0 (no shared token)."""
     gold = list(gold_ids)
-    ranks = {lang: indexes[lang].rank(question, gold) for lang in CORPUS_LANGS}
+    ranks = {lang: indexes[lang].rank_scored(question, gold) for lang in CORPUS_LANGS}
     return ranks, lexical_overlap(ranks, query_lang)

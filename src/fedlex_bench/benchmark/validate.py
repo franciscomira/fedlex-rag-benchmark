@@ -9,12 +9,21 @@ Errors: ``json``, ``files``, ``schema``, ``is_trap``, ``id_format``, ``id_order`
 ``source_act``, ``split_rule``, ``gold_in_both_splits``, ``gold_reused``, ``translation``,
 ``fact_article``, ``fact_count``, ``trap_fields``, ``answerable_fields``, ``question_length``,
 ``question_duplicate``, ``question_near_duplicate``, ``lang_balance``, ``act_quota``,
-``provenance``, ``review_fields``, ``rank_mismatch`` and, with ``--freeze``, ``freeze_status`` and
-``freeze_reviewer``.
+``provenance``, ``review_fields``, ``rank_mismatch``, ``cross_ref_act`` and, with ``--freeze``,
+``freeze_status`` and ``freeze_reviewer``. A complete set (not ``--partial``) must also pass
+``total_count`` (150 answerable, 20 traps), ``split_count`` (dev 40 / test 110 answerable, traps
+5 / 15), ``trap_lang_count`` (5 traps per query language) and ``cross_ref_count`` (22, plus or
+minus 1).
 
 Warnings: ``warn_same_lang_rank1`` (more than 40% of the non-English items have BM25 rank 1 in
-their own language), ``warn_pair_cell`` (fewer than 20 items in a query/source language cell),
+their own language), ``warn_pair_cell`` (fewer than 5 items in a query/source language cell:
+the plan cannot reach more), ``warn_dev_lang`` (the dev language counts differ by more than 2),
 ``warn_agent_file`` (provenance without an agent file hash).
+
+BM25 fields: ``bm25_rank[lang]`` is null where the best gold article scores 0;
+``lexical_overlap`` is the rank in the question's own language, null if that rank is null and
+for English questions. All ranks are recomputed for every answerable item, translations
+included; ``--freeze`` always recomputes.
 
 The language balance and the act quotas apply to a complete benchmark. ``--partial`` skips them
 for a set that is still being filled (the selected files of an unfinished run).
@@ -35,11 +44,16 @@ from fedlex_bench.benchmark.bm25 import Bm25Index, build_indexes, compute_ranks
 from fedlex_bench.benchmark.common import (
     ACT_QUOTA,
     CORPUS_LANGS,
+    CROSS_REF_FINAL,
+    DEV_ANSWERABLE,
     DIFFICULTIES,
     QTYPES,
     QUERY_LANGS,
     SELECTED_DIR,
     SPLITS,
+    TEST_ANSWERABLE,
+    TRAP_FINAL,
+    TRAP_LANG_FINAL,
     TRAP_TYPES,
     id_key,
     load_corpus,
@@ -89,7 +103,11 @@ LANG_SHARE = (0.22, 0.28)
 QUOTA_TOLERANCE = 1
 NEAR_DUPLICATE_JACCARD = 0.8
 SAME_LANG_RANK1_SHARE = 0.40
-MIN_PAIR_CELL = 20
+MIN_PAIR_CELL = 5
+TOTAL_ANSWERABLE = 150
+TOTAL_TRAPS = 20
+CROSS_REF_FINAL_TOLERANCE = 1
+DEV_LANG_SPREAD = 2
 _ID_RE = re.compile(r"v1-\d{4}")
 _SHA_RE = re.compile(r"[0-9a-f]{64}")
 _AGENT_RE = re.compile(
@@ -197,9 +215,9 @@ def schema_problems(item: dict) -> list[str]:
         or (
             isinstance(ranks, dict)
             and set(ranks) == set(CORPUS_LANGS)
-            and all(_is_int(v) and v >= 1 for v in ranks.values())
+            and all(v is None or (_is_int(v) and v >= 1) for v in ranks.values())
         ),
-        "bm25_rank must be null or {de, fr, it} with integers >= 1",
+        "bm25_rank must be null or {de, fr, it} with integers >= 1 or null",
     )
     check(
         item["trap_type"] is None or item["trap_type"] in TRAP_TYPES,
@@ -334,8 +352,11 @@ def validate_items(
     answerable = [it for it in originals if not it["is_trap"]]
     if not partial:
         _check_balance_and_quotas(report, answerable)
-    if check_ranks and answerable:
-        _check_ranks(report, answerable, df, indexes)
+        _check_completeness(report, originals)
+    # every answerable item, translations included; a freeze never skips it
+    ranked = [it for it in items if not it["is_trap"]]
+    if (check_ranks or freeze) and ranked:
+        _check_ranks(report, ranked, df, indexes)
     _warnings(report, answerable, items)
     return report
 
@@ -379,8 +400,15 @@ def _check_item(
         problems.append("source_lang is required for an answerable item")
     if it["difficulty"] is None:
         problems.append("difficulty is required for an answerable item")
-    if it["bm25_rank"] is None or it["lexical_overlap"] is None:
-        problems.append("bm25_rank and lexical_overlap are required for an answerable item")
+    if it["bm25_rank"] is None:
+        problems.append("bm25_rank is required for an answerable item")
+    else:
+        own = None if it["query_lang"] == "en" else it["bm25_rank"][it["query_lang"]]
+        if it["lexical_overlap"] != own:
+            problems.append(
+                f"lexical_overlap is {it['lexical_overlap']} but must be {own} (the rank in "
+                f"the own-language index; null for English)"
+            )
     for p in problems:
         report.error("answerable_fields", item_id, p)
 
@@ -401,6 +429,8 @@ def _check_item(
             report.error(
                 "split_rule", item_id, f"{g}: rule gives {split_of(g)!r}, item says {it['split']!r}"
             )
+    if qtype == "cross_ref" and len({g.partition(":")[0] for g in gold}) != 1:
+        report.error("cross_ref_act", item_id, f"the secondary article is in another act: {gold}")
     if it["source_act"] != gold[0].partition(":")[0]:
         report.error(
             "source_act", item_id, f"source_act {it['source_act']!r} is not the act of {gold[0]}"
@@ -429,6 +459,8 @@ def _check_translations(report: Report, items: list[dict], by_id: dict[str, dict
             report.error("translation", it["id"], f"translation_of {parent_id} is not an item")
         elif parent["translation_of"]:
             report.error("translation", it["id"], "a translation of a translation")
+        elif parent["qtype"] != "single":
+            report.error("translation", it["id"], "the original must be a single item")
         else:
             if it["gold_article_ids"] != parent["gold_article_ids"]:
                 report.error("translation", it["id"], "gold_article_ids differ from the original")
@@ -534,6 +566,43 @@ def _check_balance_and_quotas(report: Report, answerable: list[dict]) -> None:
             )
 
 
+def _check_completeness(report: Report, originals: list[dict]) -> None:
+    """Totals of a complete benchmark: 150 answerable, 20 traps, dev 40 / test 110, 5 traps per
+    query language, 22 cross_ref (plus or minus 1). Translations do not count."""
+    answerable = [it for it in originals if not it["is_trap"]]
+    traps = [it for it in originals if it["is_trap"]]
+    if len(answerable) != TOTAL_ANSWERABLE:
+        report.error(
+            "total_count", "answerable", f"{len(answerable)} items, expected {TOTAL_ANSWERABLE}"
+        )
+    if len(traps) != TOTAL_TRAPS:
+        report.error("total_count", "traps", f"{len(traps)} traps, expected {TOTAL_TRAPS}")
+    for split, want in (("dev", DEV_ANSWERABLE), ("test", TEST_ANSWERABLE)):
+        got = sum(1 for it in answerable if it["split"] == split)
+        if got != want:
+            report.error("split_count", f"{split} answerable", f"{got} items, expected {want}")
+    for split, want in TRAP_FINAL.items():
+        got = sum(1 for it in traps if it["split"] == split)
+        if got != want:
+            report.error("split_count", f"{split} traps", f"{got} traps, expected {want}")
+    langs = Counter(it["query_lang"] for it in traps)
+    for lang in QUERY_LANGS:
+        if langs[lang] != TRAP_LANG_FINAL[lang]:
+            report.error(
+                "trap_lang_count",
+                f"query_lang={lang}",
+                f"{langs[lang]} traps, expected {TRAP_LANG_FINAL[lang]}",
+            )
+    n_cross = sum(1 for it in answerable if it["qtype"] == "cross_ref")
+    if abs(n_cross - CROSS_REF_FINAL) > CROSS_REF_FINAL_TOLERANCE:
+        report.error(
+            "cross_ref_count",
+            "cross_ref",
+            f"{n_cross} cross_ref items, expected {CROSS_REF_FINAL} "
+            f"(plus or minus {CROSS_REF_FINAL_TOLERANCE})",
+        )
+
+
 def _check_ranks(
     report: Report, answerable: list[dict], df: pd.DataFrame, indexes: dict[str, Bm25Index] | None
 ) -> None:
@@ -567,6 +636,13 @@ def _warnings(report: Report, answerable: list[dict], items: list[dict]) -> None
                 f"of their own language ({top / len(own_language):.0%}, limit "
                 f"{SAME_LANG_RANK1_SHARE:.0%})",
             )
+    dev = Counter(it["query_lang"] for it in answerable if it["split"] == "dev")
+    if (
+        dev
+        and max(dev[q] for q in QUERY_LANGS) - min(dev[q] for q in QUERY_LANGS) > DEV_LANG_SPREAD
+    ):
+        counts = ", ".join(f"{q}={dev[q]}" for q in QUERY_LANGS)
+        report.warn("warn_dev_lang", "dev", f"dev answerable items per query language: {counts}")
     cells = Counter((it["query_lang"], it["source_lang"]) for it in answerable)
     for q in QUERY_LANGS:
         for s in CORPUS_LANGS:
@@ -619,6 +695,8 @@ def run(argv: list[str] | None = None, corpus: pd.DataFrame | None = None) -> in
         "--skip-rank-check", action="store_true", help="do not recompute the BM25 ranks"
     )
     args = ap.parse_args(argv)
+    if args.freeze and args.skip_rank_check:
+        ap.error("--freeze always recomputes the BM25 ranks: drop --skip-rank-check")
     df = corpus if corpus is not None else load_corpus(args.parquet)
     report = validate_dir(
         args.dir, df, freeze=args.freeze, partial=args.partial, check_ranks=not args.skip_rank_check

@@ -62,6 +62,9 @@ DIFFICULTIES: tuple[str, ...] = ("easy", "medium", "hard")
 BENCHMARK_DIR = PROJECT_ROOT / "benchmark"
 PLAN_DIR = BENCHMARK_DIR / "plan"
 SLOTS_PATH = PLAN_DIR / "slots.jsonl"
+TWINS_PATH = PLAN_DIR / "twins.jsonl"
+INDEX_PATH = PLAN_DIR / "index.json"
+INDEX_PILOT_PATH = PLAN_DIR / "index-pilot.json"
 BRIEFS_DIR = PLAN_DIR / "briefs"
 DRAFTS_DIR = BENCHMARK_DIR / "drafts"
 CRITIC_DIR = BENCHMARK_DIR / "critic"
@@ -139,17 +142,47 @@ def write_jsonl(path: Path, records: Iterable[Mapping]) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def read_jsonl(path: Path) -> list[dict]:
-    """Read a JSONL file. Raises ``ValueError`` naming the line on bad JSON."""
+def numbered_lines(text: str) -> list[tuple[int, str]]:
+    """``(line number, line)`` of the non-blank lines. Lines end at a line feed only: U+2028,
+    U+0085 and form feed are legal inside a JSON string and are not line breaks here."""
+    return [(n, line) for n, line in enumerate(text.split("\n"), 1) if line.strip()]
+
+
+def split_lines(text: str) -> list[str]:
+    return [line for _, line in numbered_lines(text)]
+
+
+def read_jsonl_text(text: str, label: str) -> list[dict]:
+    """Parse JSONL text. Raises ``ValueError`` naming ``label:line`` on bad JSON."""
     out: list[dict] = []
-    for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-        if not line.strip():
-            continue
+    for n, line in numbered_lines(text):
         try:
             out.append(json.loads(line))
         except json.JSONDecodeError as exc:
-            raise ValueError(f"{path}:{n}: invalid JSON ({exc.msg})") from exc
+            raise ValueError(f"{label}:{n}: invalid JSON ({exc.msg})") from exc
     return out
+
+
+def read_jsonl(path: Path) -> list[dict]:
+    """Read a JSONL file (split at line feeds only). Raises ``ValueError`` naming the line."""
+    return read_jsonl_text(path.read_bytes().decode("utf-8"), str(path))
+
+
+def canonical_sha256(obj: object) -> str:
+    """sha256 of the canonical JSON (sorted keys, UTF-8) of ``obj``."""
+    return hashlib.sha256(dumps(obj).encode("utf-8")).hexdigest()
+
+
+def slot_hash(slot: dict) -> str:
+    """Hash of a plan slot, gold ids included. The ``pilot`` mark is not part of what a writer
+    drafts from, so it does not count."""
+    return canonical_sha256({k: v for k, v in slot.items() if k != "pilot"})
+
+
+def slots_sha256(slots: list[dict]) -> str:
+    """sha256 the slots file has when written by :func:`write_jsonl`."""
+    data = "".join(dumps(s) + "\n" for s in slots).encode("utf-8")
+    return hashlib.sha256(data).hexdigest()
 
 
 def sha256_file(path: Path) -> str:

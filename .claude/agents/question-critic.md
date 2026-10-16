@@ -16,8 +16,10 @@ For answerable items:
 
 For traps: is the answer truly absent from all 8 acts in all 3 languages? Search for it, name the closest article you found in `notes`, and say whether a reasonable reader could answer from it. If so, verdict is drop.
 
+Twin check: if the gold article has a near-identical article elsewhere in the corpus (same wording for a different institution, for example cooperative versus company), name it in `competing_ids`; the question must tell them apart, otherwise verdict is fix or drop.
+
 For translations (items with `translation_of`): does the translation keep the meaning of the original exactly, with no added or lost conditions?
 
-Be strict: a weak question costs more than a missing one. Return exactly one JSON object per item, one per line, nothing else after them:
-{"slot_id": "...", "verdict": "keep" | "fix" | "drop", "reason_code": "ok" | "not_answerable" | "facts_unsupported" | "competing_article" | "lexical_copy" | "ambiguous" | "outside_knowledge" | "trap_answerable" | "wrong_language" | "bad_translation" | "other", "notes": "...", "competing_ids": [], "fix": "the concrete rewrite for fix verdicts, else null"}
+Be strict: a weak question costs more than a missing one. Copy `candidate_sha256` from each candidate record unchanged; it ties your verdict to the exact text you judged. Return exactly one JSON object per item, one per line, nothing else after them:
+{"slot_id": "...", "candidate_sha256": "<copy from the candidate record>", "round": <the round number you were given>, "verdict": "keep" | "fix" | "drop", "reason_code": "ok" | "not_answerable" | "facts_unsupported" | "competing_article" | "lexical_copy" | "ambiguous" | "outside_knowledge" | "trap_answerable" | "wrong_language" | "bad_translation" | "other", "notes": "...", "competing_ids": [], "fix": "the concrete rewrite for fix verdicts, else null"}
 A fix must be small and concrete (a rewritten question or fact text). If a fix would change which article answers the question, the verdict is drop.

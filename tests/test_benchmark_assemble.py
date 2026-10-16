@@ -10,6 +10,8 @@ import pytest
 from benchmark_fixtures import make_corpus
 from fedlex_bench.benchmark import assemble, drafts, plan
 from fedlex_bench.benchmark.bm25 import build_indexes, compute_ranks
+from fedlex_bench.benchmark.brief import BriefIndex
+from fedlex_bench.benchmark.common import canonical_sha256, slot_hash
 
 
 @pytest.fixture(scope="module")
@@ -125,6 +127,39 @@ def test_missing_required_fields_are_reported(tmp_path, slots, missing):
     del rec[missing]
     probs = problems_for(tmp_path, slots, rec)
     assert len(probs) == 1 and missing in probs[0]
+
+
+def test_answerable_record_may_carry_trap_reason_null_and_empty_note(tmp_path, slots):
+    s = pick(slots, qtype="single")
+    rec = ans_record(s["slot_id"], trap_reason=None, note="")
+    assert problems_for(tmp_path, slots, rec) == []
+    assert (
+        problems_for(tmp_path, slots, ans_record(s["slot_id"], trap_reason=None, note=None)) == []
+    )
+    c = pick(slots, qtype="cross_ref")
+    assert problems_for(tmp_path, slots, cross_record(c["slot_id"], trap_reason=None)) == []
+
+
+def test_answerable_record_with_a_trap_reason_string_is_rejected(tmp_path, slots):
+    s = pick(slots, qtype="single")
+    for value in ("a reason", "", " "):
+        probs = problems_for(tmp_path, slots, ans_record(s["slot_id"], trap_reason=value))
+        assert len(probs) == 1 and "trap_reason must be null" in probs[0], value
+
+
+def test_skip_record_with_null_fields_is_accepted(tmp_path, slots):
+    s = pick(slots, qtype="single")
+    rec = {
+        "slot_id": s["slot_id"],
+        "skip": True,
+        "skip_reason": "vague",
+        "question": None,
+        "trap_reason": None,
+        "gold_facts": None,
+        "difficulty": None,
+        "note": "",
+    }
+    assert problems_for(tmp_path, slots, rec) == []
 
 
 def test_trap_needs_a_reason(tmp_path, slots):
@@ -249,10 +284,22 @@ def test_empty_or_missing_directory(tmp_path, slots):
 # ------------------------------------------------------------------ assemble
 
 
+PLAN_SHA = "e" * 64
+
+
+def index_for(slots, plan_sha256=PLAN_SHA, sha="d" * 64) -> BriefIndex:
+    """A brief index as ``brief`` writes it: every slot with its brief file and slot hash."""
+    entries = {
+        s["slot_id"]: {"file": "x.md", "sha256": sha, "slot_sha256": slot_hash(s)} for s in slots
+    }
+    return BriefIndex(plan_sha256=plan_sha256, slots=entries)
+
+
 def assembled(tmp_path, slots, corpus, indexes, records, **kw):
     write(tmp_path, "w.jsonl", records)
     loaded = drafts.load_drafts(tmp_path, slots)
     assert loaded.problems == []
+    kw.setdefault("brief_index", index_for(slots))
     return assemble.assemble(
         slots, loaded.records, corpus, indexes=indexes, drafted_on="2026-10-16", **kw
     )
@@ -301,18 +348,36 @@ def test_trap_item_has_no_gold_and_no_ranks(tmp_path, slots, corpus, indexes):
 
 def test_bm25_fields_are_computed_by_code(tmp_path, slots, corpus, indexes):
     s = pick(slots, qtype="single", query_lang="de")
-    q = "Inhalt zu Nummer 3 inhalt3 wortlaut"
+    number = s["gold_article_ids"][0].partition(":")[2]
+    q = f"Frage zu inhalt{number} und wortlaut"  # shares a token with the gold article
     (item,) = assembled(
         tmp_path, slots, corpus, indexes, [ans_record(s["slot_id"], question=q)]
     ).candidates
     ranks, overlap = compute_ranks(q, s["gold_article_ids"], "de", indexes)
     assert item["bm25_rank"] == ranks and item["lexical_overlap"] == overlap == ranks["de"]
-    assert set(item["bm25_rank"]) == {"de", "fr", "it"}
+    assert ranks["de"] == 1 and set(item["bm25_rank"]) == {"de", "fr", "it"}
+
+
+def test_a_gold_article_without_a_shared_token_has_null_ranks(tmp_path, slots, corpus, indexes):
+    s = pick(slots, qtype="single", query_lang="fr")
+    (item,) = assembled(
+        tmp_path, slots, corpus, indexes, [ans_record(s["slot_id"], question="zzzz qqqq xxxx?")]
+    ).candidates
+    assert item["bm25_rank"] == {"de": None, "fr": None, "it": None}
+    assert item["lexical_overlap"] is None
+
+
+def test_english_items_keep_the_three_ranks_but_have_no_lexical_overlap(
+    tmp_path, slots, corpus, indexes
+):
     en = pick(slots, qtype="single", query_lang="en")
+    number = en["gold_article_ids"][0].partition(":")[2]
+    q = f"What about inhalt{number}?"
     (item,) = assembled(
         tmp_path, slots, corpus, indexes, [ans_record(en["slot_id"], question=q)]
     ).candidates
-    assert item["lexical_overlap"] == min(item["bm25_rank"].values())
+    assert item["lexical_overlap"] is None
+    assert all(item["bm25_rank"][lang] == 1 for lang in ("de", "fr", "it"))
 
 
 def test_review_fields_stay_unreviewed_and_translation_is_empty(tmp_path, slots, corpus, indexes):
@@ -336,7 +401,6 @@ def test_provenance(tmp_path, slots, corpus, indexes):
         indexes,
         [ans_record(s["slot_id"], note="check this", competing_candidates=["limitation periods"])],
         agent_file=agent,
-        plan_sha256="c" * 64,
         drafter="question-writer",
         model="opus",
     )
@@ -344,14 +408,14 @@ def test_provenance(tmp_path, slots, corpus, indexes):
     import hashlib
 
     assert prov["agent_file_sha256"] == hashlib.sha256(b"role file").hexdigest()
-    assert prov["plan_sha256"] == "c" * 64
+    assert prov["plan_sha256"] == PLAN_SHA  # from the brief index, not from any current file
     assert prov["drafted_on"] == "2026-10-16"
     assert (prov["drafter"], prov["model"]) == ("question-writer", "opus")
     assert prov["slot_id"] == s["slot_id"]
     assert (prov["critic_verdict"], prov["critic_rounds"], prov["critic_notes"]) == (None, 0, None)
     assert prov["writer_note"] == "check this"
     assert prov["competing_candidates"] == ["limitation periods"]
-    assert prov["brief_sha256"] is None
+    assert prov["brief_sha256"] == "d" * 64
 
 
 def test_brief_sha256_comes_from_the_brief_index(tmp_path, slots, corpus, indexes):
@@ -362,9 +426,71 @@ def test_brief_sha256_comes_from_the_brief_index(tmp_path, slots, corpus, indexe
         corpus,
         indexes,
         [ans_record(s["slot_id"])],
-        brief_index={s["slot_id"]: {"file": "220-01.md", "sha256": "d" * 64}},
+        brief_index=index_for(slots, plan_sha256="f" * 64, sha="9" * 64),
     )
-    assert res.candidates[0]["provenance"]["brief_sha256"] == "d" * 64
+    prov = res.candidates[0]["provenance"]
+    assert prov["brief_sha256"] == "9" * 64 and prov["plan_sha256"] == "f" * 64
+
+
+def test_a_slot_that_changed_since_the_brief_was_written_is_refused(
+    tmp_path, slots, corpus, indexes
+):
+    s = pick(slots, qtype="single")
+    changed = [
+        {**x, "gold_article_ids": ["220:999"]} if x["slot_id"] == s["slot_id"] else x for x in slots
+    ]
+    res = assembled(
+        tmp_path, slots, corpus, indexes, [ans_record(s["slot_id"])], brief_index=index_for(changed)
+    )
+    assert res.candidates == []
+    assert len(res.problems) == 1 and s["slot_id"] in res.problems[0]
+    assert "differs" in res.problems[0] and "brief" in res.problems[0]
+
+
+def test_the_pilot_flag_does_not_count_as_a_change(tmp_path, slots, corpus, indexes):
+    s = pick(slots, qtype="single")
+    flipped = [{**x, "pilot": not x["pilot"]} if x["slot_id"] == s["slot_id"] else x for x in slots]
+    res = assembled(
+        tmp_path, slots, corpus, indexes, [ans_record(s["slot_id"])], brief_index=index_for(flipped)
+    )
+    assert len(res.candidates) == 1 and res.problems == []
+
+
+def test_a_slot_without_a_brief_is_refused(tmp_path, slots, corpus, indexes):
+    s = pick(slots, qtype="single")
+    index = index_for([x for x in slots if x["slot_id"] != s["slot_id"]])
+    res = assembled(tmp_path, slots, corpus, indexes, [ans_record(s["slot_id"])], brief_index=index)
+    assert res.candidates == [] and "no brief" in res.problems[0]
+
+
+def test_candidate_sha256_covers_question_and_gold_facts(tmp_path, slots, corpus, indexes):
+    s = pick(slots, qtype="single")
+    (a,) = assembled(tmp_path, slots, corpus, indexes, [ans_record(s["slot_id"])]).candidates
+    expected = canonical_sha256({"question": a["question"], "gold_facts": a["gold_facts"]})
+    assert a["candidate_sha256"] == expected
+    (b,) = assembled(
+        tmp_path, slots, corpus, indexes, [ans_record(s["slot_id"], question="Eine andere Frage?")]
+    ).candidates
+    assert b["candidate_sha256"] != a["candidate_sha256"]
+    facts = [{"text": "A different fact.", "article": "A"}]
+    (c,) = assembled(
+        tmp_path, slots, corpus, indexes, [ans_record(s["slot_id"], gold_facts=facts)]
+    ).candidates
+    assert c["candidate_sha256"] not in {a["candidate_sha256"], b["candidate_sha256"]}
+    # difficulty and the writer note are not part of what the critic judges
+    (d,) = assembled(
+        tmp_path, slots, corpus, indexes, [ans_record(s["slot_id"], difficulty="hard", note="x")]
+    ).candidates
+    assert d["candidate_sha256"] == a["candidate_sha256"]
+
+
+def test_trap_candidate_sha256(tmp_path, slots, corpus, indexes):
+    s = pick(slots, qtype="trap")
+    (a,) = assembled(tmp_path, slots, corpus, indexes, [trap_record(s["slot_id"])]).candidates
+    (b,) = assembled(
+        tmp_path, slots, corpus, indexes, [trap_record(s["slot_id"], question="Another trap?")]
+    ).candidates
+    assert a["candidate_sha256"] != b["candidate_sha256"]
 
 
 def test_skip_is_dropped_and_logged(tmp_path, slots, corpus, indexes):
@@ -404,7 +530,7 @@ def test_candidate_keys_are_the_item_schema_plus_slot_id(tmp_path, slots, corpus
     (item,) = assembled(tmp_path, slots, corpus, indexes, [ans_record(s["slot_id"])]).candidates
     from fedlex_bench.benchmark.validate import ITEM_KEYS
 
-    assert set(item) == ITEM_KEYS | {"slot_id"}
+    assert set(item) == ITEM_KEYS | {"slot_id", "candidate_sha256"}
 
 
 def test_bad_drafted_on_is_an_error(tmp_path, slots, corpus, indexes):
@@ -412,30 +538,48 @@ def test_bad_drafted_on_is_an_error(tmp_path, slots, corpus, indexes):
     write(tmp_path, "w.jsonl", [ans_record(s["slot_id"])])
     loaded = drafts.load_drafts(tmp_path, slots)
     with pytest.raises(ValueError, match="drafted_on"):
-        assemble.assemble(slots, loaded.records, corpus, indexes=indexes, drafted_on="16.10.2026")
+        assemble.assemble(
+            slots,
+            loaded.records,
+            corpus,
+            indexes=indexes,
+            drafted_on="16.10.2026",
+            brief_index=index_for(slots),
+        )
 
 
 # ------------------------------------------------------------------ the command
 
 
-def run_assemble(tmp_path, slots, corpus, extra=()):
+def write_index(path, slots, plan_sha256=PLAN_SHA):
+    index = index_for(slots, plan_sha256)
+    path.write_bytes(
+        (json.dumps({"plan_sha256": index.plan_sha256, "slots": index.slots}) + "\n").encode()
+    )
+    return path
+
+
+def run_assemble(tmp_path, slots, corpus, extra=(), index=True):
     slots_path = tmp_path / "slots.jsonl"
     plan.write_slots(slots, slots_path)
     out = tmp_path / "out" / "candidates.jsonl"
-    code = assemble.run(
-        [
-            "--slots",
-            str(slots_path),
-            "--drafts",
-            str(tmp_path / "drafts"),
-            "--out",
-            str(out),
-            "--drafted-on",
-            "2026-10-16",
-            *extra,
-        ],
-        corpus=corpus,
-    )
+    args = [
+        "--slots",
+        str(slots_path),
+        "--drafts",
+        str(tmp_path / "drafts"),
+        "--out",
+        str(out),
+        "--drafted-on",
+        "2026-10-16",
+    ]
+    if index:
+        full = [x for x in slots if not x["pilot"]]
+        pilot = [x for x in slots if x["pilot"]]
+        a = write_index(tmp_path / "index.json", full)
+        b = write_index(tmp_path / "index-pilot.json", pilot)
+        args += ["--brief-index", str(a), str(b)]
+    code = assemble.run([*args, *extra], corpus=corpus)
     return code, out
 
 
@@ -469,3 +613,147 @@ def test_command_allow_partial_writes_the_valid_records(tmp_path, slots, corpus,
     code, out = run_assemble(tmp_path, slots, corpus, extra=["--allow-partial"])
     assert code == 1 and out.exists()  # still non-zero: there were problems
     assert len(out.read_text(encoding="utf-8").splitlines()) == 1
+
+
+# ------------------------------------------------------------------ what a writer must not type
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Was sagt Artikel 5 dazu?",
+        "Que dit l'article 4 ?",
+        "Cosa dice l'articolo 7?",
+        "What does Art. 12 say?",
+        "See ARTICLES 3 and 4",
+        "Und art.5 des Gesetzes?",
+        "Was regelt SR 220?",
+        "Was regelt sr281.1?",
+    ],
+)
+def test_article_numbers_and_sr_numbers_are_rejected_in_questions_and_facts(tmp_path, slots, text):
+    s = pick(slots, qtype="single")
+    probs = problems_for(tmp_path, slots, ans_record(s["slot_id"], question=text))
+    assert len(probs) == 1 and "question" in probs[0] and "writers never type" in probs[0], text
+    facts = [{"text": text, "article": "A"}]
+    probs = problems_for(tmp_path, slots, ans_record(s["slot_id"], gold_facts=facts))
+    assert len(probs) == 1 and "gold_facts[0]" in probs[0] and "article" in probs[0], text
+    trap = pick(slots, qtype="trap")
+    assert problems_for(tmp_path, slots, trap_record(trap["slot_id"], question=text))
+
+
+def test_ordinary_words_that_look_like_article_mentions_are_fine(tmp_path, slots):
+    s = pick(slots, qtype="single")
+    for text in (
+        "Which article of the contract applies to a sale?",
+        "Wie viele Wochen dauert die Frist?",
+        "Un start 5 minuti dopo",
+    ):
+        assert problems_for(tmp_path, slots, ans_record(s["slot_id"], question=text)) == [], text
+
+
+def test_a_skip_record_must_have_empty_other_fields(tmp_path, slots):
+    s = pick(slots, qtype="single")
+    base = {"slot_id": s["slot_id"], "skip": True, "skip_reason": "vague"}
+    assert problems_for(tmp_path, slots, {**base, "question": None, "gold_facts": []}) == []
+    assert problems_for(tmp_path, slots, {**base, "note": "free text is fine"}) == []
+    for key, value in (
+        ("question", "Eine Frage?"),
+        ("gold_facts", [{"text": "x", "article": "A"}]),
+        ("difficulty", "easy"),
+        ("trap_reason", "because"),
+        ("competing_candidates", ["x"]),
+    ):
+        probs = problems_for(tmp_path, slots, {**base, key: value})
+        assert len(probs) == 1 and key in probs[0] and "skip" in probs[0], key
+
+
+def test_drafts_are_split_at_line_feeds_only(tmp_path, slots):
+    s = pick(slots, qtype="single")
+    rec = ans_record(s["slot_id"], question="Erste Zeile zweite Zeile\u0085dritte?")
+    (tmp_path / "w.jsonl").write_bytes((json.dumps(rec, ensure_ascii=False) + "\n").encode("utf-8"))
+    loaded = drafts.load_drafts(tmp_path, slots)
+    assert loaded.problems == []
+    assert " " in loaded.records[s["slot_id"]]["question"]
+
+
+def test_command_merges_the_full_and_the_pilot_index(tmp_path, slots, corpus, capsys):
+    (tmp_path / "drafts").mkdir()
+    pilot_slot = next(x for x in slots if x["pilot"] and x["qtype"] == "single")
+    normal = next(x for x in slots if not x["pilot"] and x["qtype"] == "single")
+    write(
+        tmp_path / "drafts",
+        "w.jsonl",
+        [ans_record(pilot_slot["slot_id"]), ans_record(normal["slot_id"])],
+    )
+    code, out = run_assemble(tmp_path, slots, corpus)
+    assert code == 0 and len(out.read_text(encoding="utf-8").splitlines()) == 2
+
+
+def test_command_needs_a_brief_index(tmp_path, slots, corpus, capsys, monkeypatch):
+    # the default index files are those of the repository: point them at nothing
+    monkeypatch.setattr(assemble, "INDEX_PATH", tmp_path / "none-index.json")
+    monkeypatch.setattr(assemble, "INDEX_PILOT_PATH", tmp_path / "none-pilot.json")
+    (tmp_path / "drafts").mkdir()
+    s = pick(slots, qtype="single")
+    write(tmp_path / "drafts", "w.jsonl", [ans_record(s["slot_id"])])
+    code, out = run_assemble(tmp_path, slots, corpus, index=False)
+    assert code == 1 and not out.exists()
+    assert "brief index" in capsys.readouterr().out
+
+
+def test_command_refuses_a_slot_that_differs_from_its_brief(tmp_path, slots, corpus, capsys):
+    (tmp_path / "drafts").mkdir()
+    s = pick(slots, qtype="single")
+    write(tmp_path / "drafts", "w.jsonl", [ans_record(s["slot_id"])])
+    other_plan = [
+        {**x, "gold_article_ids": ["220:998"]} if x["slot_id"] == s["slot_id"] else x for x in slots
+    ]
+    slots_path = tmp_path / "slots.jsonl"
+    plan.write_slots(slots, slots_path)
+    idx = write_index(tmp_path / "index.json", other_plan)
+    out = tmp_path / "out.jsonl"
+    code = assemble.run(
+        [
+            "--slots",
+            str(slots_path),
+            "--drafts",
+            str(tmp_path / "drafts"),
+            "--out",
+            str(out),
+            "--drafted-on",
+            "2026-10-16",
+            "--brief-index",
+            str(idx),
+        ],
+        corpus=corpus,
+    )
+    assert code == 1 and not out.exists()
+    assert s["slot_id"] in capsys.readouterr().out
+
+
+def test_command_refuses_indexes_from_different_plans(tmp_path, slots, corpus, capsys):
+    (tmp_path / "drafts").mkdir()
+    s = pick(slots, qtype="single")
+    write(tmp_path / "drafts", "w.jsonl", [ans_record(s["slot_id"])])
+    slots_path = tmp_path / "slots.jsonl"
+    plan.write_slots(slots, slots_path)
+    full = write_index(tmp_path / "a.json", [x for x in slots if not x["pilot"]])
+    pilot = write_index(tmp_path / "b.json", [x for x in slots if x["pilot"]], plan_sha256="1" * 64)
+    code = assemble.run(
+        [
+            "--slots",
+            str(slots_path),
+            "--drafts",
+            str(tmp_path / "drafts"),
+            "--out",
+            str(tmp_path / "o.jsonl"),
+            "--drafted-on",
+            "2026-10-16",
+            "--brief-index",
+            str(full),
+            str(pilot),
+        ],
+        corpus=corpus,
+    )
+    assert code == 1 and "different plans" in capsys.readouterr().out
