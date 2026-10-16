@@ -18,6 +18,12 @@ Optional, git-ignored English review aids (``data/processed/review_aids``: ``aid
 ``flags.jsonl``, ``blind-*.jsonl``) are shown when present; the app works without them. The
 English article text is an unofficial working translation, the DE/FR/IT text is authoritative.
 
+Machine verdicts (``benchmark/machine_review/<judge>-<n>.jsonl``, see ``machine_review.py``) are
+shown under the item with their reasons, except for calibration-sample items the human has not yet
+reviewed: those stay hidden until the review is saved so the human judgement is independent. The
+sidebar has a "Calibration sample only" filter (plain id order) and a "calibration reviewed x/30"
+counter. The app only reads the machine folder.
+
 Everything that matters is a plain function (load, filter, :func:`apply_review`, save) so it is
 tested without Streamlit. :func:`main` only wires widgets and imports Streamlit lazily.
 ``review_status`` is set in :func:`apply_review` and nowhere else.
@@ -32,12 +38,13 @@ import os
 import sys
 import tempfile
 from collections import Counter
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pandas as pd
 
+from fedlex_bench.benchmark import machine_review
 from fedlex_bench.benchmark.bm25 import Bm25Index, compute_ranks
 from fedlex_bench.benchmark.common import (
     CORPUS_LANGS,
@@ -275,8 +282,10 @@ def filter_items(
     qtype: str | None = None,
     query_lang: str | None = None,
     expert_flagged: bool = False,
+    only_ids: Collection[str] | None = None,
 ) -> list[dict]:
-    """Items matching every given filter (``None`` = no filter), in the order given."""
+    """Items matching every given filter (``None`` = no filter), in the order given. ``only_ids``
+    keeps only items with those ids (the calibration sample)."""
 
     def keep(i: dict) -> bool:
         if status and i["review_status"] != status:
@@ -289,6 +298,8 @@ def filter_items(
             return False
         if expert_flagged and not is_expert_flagged(i):
             return False
+        if only_ids is not None and i["id"] not in only_ids:
+            return False
         return not (query_lang and i["query_lang"] != query_lang)
 
     return [i for i in items if keep(i)]
@@ -300,6 +311,24 @@ def is_expert_flagged(item: Mapping) -> bool:
 
 def expert_flagged_count(items: list[dict]) -> int:
     return sum(is_expert_flagged(i) for i in items)
+
+
+def visible_verdicts(
+    item: Mapping, verdicts: Mapping[str, Mapping[str, dict]], sample_ids: Collection[str]
+) -> dict[str, dict]:
+    """``{judge: record}`` (judges sorted) the page may show for ``item``. Empty for a calibration
+    sample item the human has not reviewed yet, so the human judgement stays independent."""
+    if item["id"] in sample_ids and item["review_status"] == "unreviewed":
+        return {}
+    by_judge = verdicts.get(item["id"], {})
+    return {judge: by_judge[judge] for judge in sorted(by_judge)}
+
+
+def calibration_progress(items: list[dict], sample_ids: Collection[str]) -> tuple[int, int]:
+    """``(reviewed, total)`` of the calibration sample: ``total`` is the number of sample ids;
+    reviewed means a sample item whose status is anything but unreviewed."""
+    reviewed = sum(i["review_status"] != "unreviewed" for i in items if i["id"] in sample_ids)
+    return reviewed, len(sample_ids)
 
 
 def next_unreviewed(items: list[dict], after_id: str | None) -> str | None:
@@ -421,6 +450,7 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     ap.add_argument("--dir", type=Path, default=SELECTED_DIR)
     ap.add_argument("--parquet", type=Path, default=ARTICLES_PARQUET)
     ap.add_argument("--aids", type=Path, default=AIDS_DIR)
+    ap.add_argument("--machine-dir", type=Path, default=machine_review.MACHINE_DIR)
     return ap.parse_known_args(argv)[0]
 
 
@@ -447,6 +477,10 @@ def main(argv: list[str] | None = None) -> None:  # pragma: no cover - UI wiring
     df = corpus(str(args.parquet))
     aids = aids_of(str(args.aids))
     items = load_all(args.dir)
+    verdicts, machine_errors = machine_review.load_verdicts(
+        args.machine_dir, known_ids=[i["id"] for i in items]
+    )
+    sample_ids = set(machine_review.load_sample(args.machine_dir))
     ss = st.session_state
     ss.setdefault("reviewer", "")
     ss.setdefault("basis", DEFAULT_REVIEW_BASIS)
@@ -460,11 +494,17 @@ def main(argv: list[str] | None = None) -> None:  # pragma: no cover - UI wiring
             help="Saved with every review as provenance.review_basis.",
         )
         st.header("Order and filters")
-        by_risk = not st.checkbox(
+        plain_order = st.checkbox(
             "Plain id order",
             help="Off: highest risk first (from the blind-solver and critic flags), then id.",
         )
         only_expert = st.checkbox("Only items flagged for expert")
+        only_calibration = st.checkbox(
+            "Calibration sample only",
+            disabled=not sample_ids,
+            help="The 30 items every machine judge is compared on; plain id order. Machine "
+            "verdicts stay hidden until you have reviewed the item.",
+        )
         status = st.selectbox("Status", ["all", *STATUSES])
         split = st.selectbox("Split", ["all", *SPLITS])
         act = st.selectbox("Act", ["all", *acts_of(items), TRAP_ACT])
@@ -478,6 +518,12 @@ def main(argv: list[str] | None = None) -> None:  # pragma: no cover - UI wiring
             f"{prog['edited']} edited, {prog['rejected']} rejected, {prog['unreviewed']} left"
         )
         st.write(f"Flagged for expert: **{expert_flagged_count(items)}**")
+        if sample_ids:
+            done, total = calibration_progress(items, sample_ids)
+            st.write(f"Calibration reviewed: **{done}/{total}**")
+        if machine_errors:
+            st.warning(f"{len(machine_errors)} problem(s) in the machine review files")
+        by_risk = not (plain_order or only_calibration)
         if not aids:
             st.caption("No English review aids found: showing the original texts only.")
         ordered = sort_items(items, aids, by_risk=by_risk)
@@ -504,6 +550,7 @@ def main(argv: list[str] | None = None) -> None:  # pragma: no cover - UI wiring
         qtype=None if qtype == "all" else qtype,
         query_lang=None if lang == "all" else lang,
         expert_flagged=only_expert,
+        only_ids=sample_ids if only_calibration else None,
     )
     if not shown:
         st.warning("No item matches the filters.")
@@ -582,6 +629,21 @@ def main(argv: list[str] | None = None) -> None:  # pragma: no cover - UI wiring
     if ctx.get("competing_candidates"):
         st.markdown("**Competing candidates:** " + "; ".join(ctx["competing_candidates"]))
 
+    shown_verdicts = visible_verdicts(item, verdicts, sample_ids)
+    if shown_verdicts:
+        st.markdown("**Machine review** (the status above is the human's)")
+        for judge, rec in shown_verdicts.items():
+            line = f"{judge}: **{rec['verdict']}**" + (
+                f" (confidence {rec['confidence']})" if rec.get("confidence") is not None else ""
+            )
+            if rec["reason"]:
+                line += f". {rec['reason']}"
+            if rec["issues"]:
+                line += " Issues: " + "; ".join(rec["issues"])
+            (st.success if rec["verdict"] == "approve" else st.error)(line)
+    elif item["id"] in sample_ids and item["review_status"] == "unreviewed":
+        st.caption("Calibration item: machine verdicts are shown after you have reviewed it.")
+
     en_articles = english_articles(aid)
     if en_articles:
         st.markdown("### Gold article(s) in English")
@@ -622,7 +684,10 @@ def main(argv: list[str] | None = None) -> None:  # pragma: no cover - UI wiring
         except ReviewError as exc:
             st.error(str(exc))
             return
-        nxt = next_unreviewed(sort_items(load_all(args.dir), aids, by_risk=by_risk), item["id"])
+        fresh = sort_items(load_all(args.dir), aids, by_risk=by_risk)
+        if only_calibration:
+            fresh = filter_items(fresh, only_ids=sample_ids)
+        nxt = next_unreviewed(fresh, item["id"])
         if nxt:
             ss["current"] = nxt
         st.rerun()

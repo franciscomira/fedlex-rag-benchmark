@@ -559,3 +559,79 @@ def test_validator_accepts_the_new_provenance_keys():
     out = ra.apply_expert_flag(_item(1), "F", note="n")
     assert provenance_problems(out["provenance"]) == []
     assert json.loads(dumps(out))["provenance"]["expert_flag"] is True
+
+
+# ------------------------------------------------------------ machine verdicts and calibration
+
+
+def _verdict(item_id, verdict="approve", reason="looks fine"):
+    return {"id": item_id, "verdict": verdict, "issues": [], "reason": reason, "confidence": 0.8}
+
+
+def test_verdicts_are_hidden_for_unreviewed_calibration_items_only(folder):
+    items = {i["id"]: i for i in ra.load_all(folder)}
+    verdicts = {
+        "v1-0001": {"j": _verdict("v1-0001")},
+        "v1-0002": {"j": _verdict("v1-0002", "reject")},
+    }
+    sample = {"v1-0001"}
+    assert ra.visible_verdicts(items["v1-0001"], verdicts, sample) == {}  # sample, unreviewed
+    assert ra.visible_verdicts(items["v1-0002"], verdicts, sample)["j"]["verdict"] == "reject"
+    assert ra.visible_verdicts(items["v1-0003"], verdicts, sample) == {}  # no verdict at all
+
+
+@pytest.mark.parametrize("status", ["accepted", "edited", "rejected"])
+def test_verdicts_show_after_the_human_has_reviewed_a_calibration_item(status):
+    item = _item(1, review_status=status, reviewed_by="F", reviewed_at="t")
+    verdicts = {"v1-0001": {"j": _verdict("v1-0001")}}
+    assert ra.visible_verdicts(item, verdicts, {"v1-0001"})["j"]["reason"] == "looks fine"
+
+
+def test_an_expert_flag_does_not_unhide_a_calibration_item():
+    item = _item(1)
+    flagged = ra.apply_expert_flag(item, "F", note="n")
+    assert flagged["review_status"] == "unreviewed"
+    assert ra.visible_verdicts(flagged, {"v1-0001": {"j": _verdict("v1-0001")}}, {"v1-0001"}) == {}
+
+
+def test_verdicts_are_shown_for_every_judge_sorted():
+    item = _item(1)
+    verdicts = {"v1-0001": {"zed": _verdict("v1-0001"), "abe": _verdict("v1-0001", "reject")}}
+    assert list(ra.visible_verdicts(item, verdicts, set())) == ["abe", "zed"]
+
+
+def test_calibration_filter_and_counter(folder):
+    items = ra.load_all(folder)
+    sample = {"v1-0001", "v1-0003", "v1-0005"}
+    assert [i["id"] for i in ra.filter_items(items, only_ids=sample)] == [
+        "v1-0001",
+        "v1-0003",
+        "v1-0005",
+    ]
+    assert ra.calibration_progress(items, sample) == (0, 3)
+    items[0].update(review_status="accepted")
+    items[2].update(review_status="rejected")
+    assert ra.calibration_progress(items, sample) == (2, 3)
+    assert ra.calibration_progress(items, set()) == (0, 0)
+    assert ra.calibration_progress(items, {"v1-0001", "v1-9999"}) == (1, 2)
+
+
+def test_calibration_view_is_in_plain_id_order(folder):
+    items = ra.load_all(folder)
+    aids = {"v1-0005": {"risk": 9}, "v1-0003": {"risk": 4}}
+    assert [i["id"] for i in ra.sort_items(items, aids)][:2] == ["v1-0005", "v1-0003"]
+    plain = ra.sort_items(items, aids, by_risk=False)
+    assert [i["id"] for i in ra.filter_items(plain, only_ids={"v1-0005", "v1-0003"})] == [
+        "v1-0003",
+        "v1-0005",
+    ]
+
+
+def test_the_review_writes_never_touch_the_machine_folder(folder, tmp_path):
+    mdir = tmp_path / "mr"
+    mdir.mkdir()
+    (mdir / "j-1.jsonl").write_text(json.dumps(_verdict("v1-0001")) + "\n", encoding="utf-8")
+    before = (mdir / "j-1.jsonl").read_bytes()
+    ra.review_item(folder, "v1-0001", "accept", "Francisco")
+    assert (mdir / "j-1.jsonl").read_bytes() == before
+    assert sorted(p.name for p in mdir.iterdir()) == ["j-1.jsonl"]

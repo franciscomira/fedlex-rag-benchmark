@@ -1,0 +1,16 @@
+{"id": "v1-0033", "verdict": "approve", "issues": [], "reason": "Facts match DSG 59 in all langs; waiver/reduction fact loosely tied to 'who sets how much' but acceptable.", "confidence": "medium"}
+{"id": "v1-0034", "verdict": "approve", "issues": [], "reason": "UWG 11 lets actions under art 9(1)(2) (cease, rectify) go against employer; natural Italian scenario.", "confidence": "high"}
+{"id": "v1-0035", "verdict": "approve", "issues": [], "reason": "ZPO 166(1)(e) gives journalist witness a refusal right on sources; no better article in corpus.", "confidence": "high"}
+{"id": "v1-0036", "verdict": "approve", "issues": [], "reason": "ZPO 353 covers opt-out to IPRG ch.12 and form requirement; facts true in all three versions.", "confidence": "high"}
+{"id": "v1-0037", "verdict": "approve", "issues": [], "reason": "ZPO 83(1)(2) answers substitution and cost liability exactly; natural French question.", "confidence": "high"}
+{"id": "v1-0038", "verdict": "approve", "issues": [], "reason": "SchKG 107 answers contest right, 10 days, 20-day suit; non-contest fact is the consequence of the deadline.", "confidence": "medium"}
+{"id": "v1-0039", "verdict": "reject", "issues": ["fact_unsupported"], "reason": "Fact 1 says 'after at most three calls'; DE/FR/IT all say after three calls. Fix wording; item otherwise sound.", "confidence": "medium"}
+{"id": "v1-0040", "verdict": "approve", "issues": [], "reason": "SchKG 292 gives 3 years from bankruptcy and from loss certificate; both parts of question answered.", "confidence": "medium"}
+{"id": "v1-0041", "verdict": "approve", "issues": [], "reason": "No real estate gains tax rule in the 8 acts (searched DE/FR); plausible question.", "confidence": "high"}
+{"id": "v1-0042", "verdict": "approve", "issues": [], "reason": "No in-force article on early declaration of majority; only unrelated transitional rules mention Muendigkeit.", "confidence": "medium"}
+{"id": "v1-0043", "verdict": "approve", "issues": [], "reason": "OR 269a etc. do not state the reference rate or percentage per step; plausible tenant question.", "confidence": "high"}
+{"id": "v1-0044", "verdict": "approve", "issues": [], "reason": "OR 47 only allows an appropriate sum; no amounts in corpus; plausible question.", "confidence": "high"}
+{"id": "v1-0045", "verdict": "approve", "issues": [], "reason": "Prospectus content rules absent; OR 652/653e only refer to a prospectus where law requires one (pointer only).", "confidence": "high"}
+{"id": "v1-0046", "verdict": "approve", "issues": [], "reason": "ZGB 884(1)(3) directly answers: no pledge while pledgor keeps exclusive control; natural question.", "confidence": "high"}
+{"id": "v1-0047", "verdict": "approve", "issues": [], "reason": "ZGB 712i answers guarantee, three years of arrears and who may request registration.", "confidence": "high"}
+{"id": "v1-0048", "verdict": "approve", "issues": [], "reason": "ZGB 679(2) bars claim if rules were respected; para 1 covers when one can act; natural Italian.", "confidence": "high"}

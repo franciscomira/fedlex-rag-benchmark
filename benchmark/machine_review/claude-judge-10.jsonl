@@ -1,0 +1,16 @@
+{"id": "v1-0145", "verdict": "approve", "issues": [], "reason": "Art. 203 covers evidence at the hearing and Art. 210 lit. c the 7,000 CHF proposal; both are needed and facts hold in DE/FR/IT.", "confidence": "high"}
+{"id": "v1-0146", "verdict": "approve", "issues": [], "reason": "Art. 78 ZPO para 1 and 2 answer both parts (third-party notice and further notice); facts hold in all languages.", "confidence": "high"}
+{"id": "v1-0147", "verdict": "approve", "issues": [], "reason": "Domestic arbitration, Art. 360 ZPO gives default of three and the even-number presumption; facts hold in all languages.", "confidence": "high"}
+{"id": "v1-0148", "verdict": "approve", "issues": [], "reason": "Art. 285 ZPO lists the contents of the joint petition; all facts match DE/FR/IT.", "confidence": "high"}
+{"id": "v1-0149", "verdict": "reject", "issues": ["fact_unsupported"], "reason": "Fact 1 says liquidators must send creditors an extract; IT text of Art. 326 only says compile an extract and keep it available, no sending.", "confidence": "medium"}
+{"id": "v1-0150", "verdict": "approve", "issues": [], "reason": "Art. 68a SchKG answers service on the other spouse and her right to object; late-notification fact is a close elaboration.", "confidence": "medium"}
+{"id": "v1-0151", "verdict": "approve", "issues": [], "reason": "Art. 214 SchKG directly answers whether the set-off can be contested; facts hold in all languages.", "confidence": "high"}
+{"id": "v1-0152", "verdict": "approve", "issues": [], "reason": "Art. 303 answers keeping rights against co-debtors despite voting, Art. 216 the full claim in simultaneous bankruptcies; both needed.", "confidence": "high"}
+{"id": "v1-0153", "verdict": "approve", "issues": [], "reason": "Art. 222 paras 2, 3 and 6 cover housemates of a fled debtor, opening rooms and penalty warnings; facts hold in all languages.", "confidence": "high"}
+{"id": "v1-0154", "verdict": "approve", "issues": [], "reason": "Art. 132a SchKG answers remedy, start of deadline and one-year cut-off; facts hold in all languages.", "confidence": "high"}
+{"id": "v1-0155", "verdict": "approve", "issues": [], "reason": "Art. 344 SchKG answers continuing business and ban on favouring creditors; Art. 345 only adds optional court restrictions.", "confidence": "high"}
+{"id": "v1-0156", "verdict": "approve", "issues": [], "reason": "No in-force article of the 8 acts sets inheritance tax or cantonal rates; plausible question.", "confidence": "high"}
+{"id": "v1-0157", "verdict": "approve", "issues": [], "reason": "Prepayment sale rules (OR 227a-227i, 228) are repealed; only an old transitional provision mentions them, not main text.", "confidence": "high"}
+{"id": "v1-0158", "verdict": "approve", "issues": [], "reason": "KKG Art. 14 is only a pointer (Federal Council sets rate, normally max 15%); current rates are not in the acts.", "confidence": "high"}
+{"id": "v1-0159", "verdict": "approve", "issues": [], "reason": "ZGB Art. 285 gives only criteria; no article states the Federal Supreme Court method or needs tables.", "confidence": "high"}
+{"id": "v1-0160", "verdict": "approve", "issues": [], "reason": "Family homestead articles of the ZGB are repealed and absent from in-force text; plausible question.", "confidence": "high"}

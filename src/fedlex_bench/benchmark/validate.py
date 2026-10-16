@@ -34,6 +34,7 @@ from __future__ import annotations
 import argparse
 import re
 from collections import Counter
+from collections.abc import Collection
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import NamedTuple
@@ -59,6 +60,12 @@ from fedlex_bench.benchmark.common import (
     load_corpus,
     read_jsonl,
     split_of,
+)
+from fedlex_bench.benchmark.machine_review import (
+    MACHINE_DIR,
+    coverage_line,
+    machine_acceptance,
+    review_coverage,
 )
 from fedlex_bench.chunk import ARTICLES_PARQUET
 from fedlex_bench.eligibility import benchmark_eligible
@@ -305,8 +312,11 @@ def validate_items(
     check_ranks: bool = True,
     indexes: dict[str, Bm25Index] | None = None,
     facts: CorpusFacts | None = None,
+    machine_approved: Collection[str] = (),
 ) -> Report:
-    """Validate ``{"dev": [...], "test": [...]}`` against the corpus ``df``."""
+    """Validate ``{"dev": [...], "test": [...]}`` against the corpus ``df``. With ``freeze``, an
+    unreviewed item whose id is in ``machine_approved`` passes the freeze status checks (the
+    caller has verified the machine approval)."""
     report = Report()
     pool, in_all_langs = facts if facts is not None else corpus_facts(df)
 
@@ -346,7 +356,7 @@ def validate_items(
     _check_translations(report, items, by_id)
     _check_gold_use(report, items, roots)
     _check_questions(report, items)
-    _check_provenance_and_review(report, items, freeze)
+    _check_provenance_and_review(report, items, freeze, frozenset(machine_approved))
 
     originals = [it for it in items if not it["translation_of"]]
     answerable = [it for it in originals if not it["is_trap"]]
@@ -511,7 +521,9 @@ def _check_questions(report: Report, items: list[dict]) -> None:
         grams[it["query_lang"]].append((it["id"], mine))
 
 
-def _check_provenance_and_review(report: Report, items: list[dict], freeze: bool) -> None:
+def _check_provenance_and_review(
+    report: Report, items: list[dict], freeze: bool, machine_approved: frozenset[str] = frozenset()
+) -> None:
     for it in items:
         item_id = it["id"]
         for p in provenance_problems(it["provenance"]):
@@ -528,7 +540,7 @@ def _check_provenance_and_review(report: Report, items: list[dict], freeze: bool
             report.error(
                 "review_fields", item_id, f"status {status!r} needs reviewed_by and reviewed_at"
             )
-        if freeze:
+        if freeze and not (status == "unreviewed" and item_id in machine_approved):
             if status not in FROZEN_STATUSES:
                 report.error(
                     "freeze_status",
@@ -690,6 +702,14 @@ def run(argv: list[str] | None = None, corpus: pd.DataFrame | None = None) -> in
     )
     ap.add_argument("--parquet", type=Path, default=ARTICLES_PARQUET)
     ap.add_argument("--freeze", action="store_true", help="also require accepted/edited by a human")
+    ap.add_argument(
+        "--accept-machine-approved",
+        action="store_true",
+        help="with --freeze: an unreviewed item approved by every machine judge also passes",
+    )
+    ap.add_argument(
+        "--machine-dir", type=Path, default=MACHINE_DIR, help="machine review sidecar folder"
+    )
     ap.add_argument("--partial", action="store_true", help="skip language balance and act quotas")
     ap.add_argument(
         "--skip-rank-check", action="store_true", help="do not recompute the BM25 ranks"
@@ -697,10 +717,31 @@ def run(argv: list[str] | None = None, corpus: pd.DataFrame | None = None) -> in
     args = ap.parse_args(argv)
     if args.freeze and args.skip_rank_check:
         ap.error("--freeze always recomputes the BM25 ranks: drop --skip-rank-check")
+    if args.accept_machine_approved and not args.freeze:
+        ap.error("--accept-machine-approved only applies with --freeze")
     df = corpus if corpus is not None else load_corpus(args.parquet)
+    accepted: frozenset[str] = frozenset()
+    coverage = None
+    if args.accept_machine_approved:
+        pre = Report()
+        files = load_dir(args.dir, pre)
+        acceptance = machine_acceptance(files, args.machine_dir)
+        if acceptance.errors:
+            for e in acceptance.errors:
+                print(f"ERROR   machine review: {e}")
+            return 1
+        accepted = frozenset(acceptance.ids)
+        coverage = review_coverage(files, acceptance)
     report = validate_dir(
-        args.dir, df, freeze=args.freeze, partial=args.partial, check_ranks=not args.skip_rank_check
+        args.dir,
+        df,
+        freeze=args.freeze,
+        partial=args.partial,
+        check_ranks=not args.skip_rank_check,
+        machine_approved=accepted,
     )
+    if coverage is not None and not report.errors:
+        print(coverage_line(coverage))
     for v in report.warnings:
         print(f"WARNING {v}")
     for v in report.errors:

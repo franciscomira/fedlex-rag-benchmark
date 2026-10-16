@@ -1,0 +1,16 @@
+{"id": "v1-0001", "verdict": "approve", "issues": [], "reason": "Art. 259 ZGB covers both the analogy rule after marriage and the specific list of who may challenge the recognition; facts match all three texts.", "confidence": "high"}
+{"id": "v1-0002", "verdict": "approve", "issues": [], "reason": "Art. 495(3) answers the descendants question; fact 1 is background premise but directly frames the pact. Art. 496 does not change the answer.", "confidence": "medium"}
+{"id": "v1-0003", "verdict": "approve", "issues": [], "reason": "Both 720a and 720(3) are needed for an animal found in a station; facts supported in DE/FR/IT.", "confidence": "high"}
+{"id": "v1-0004", "verdict": "approve", "issues": [], "reason": "Art. 524(1) gives standing of loss-certificate creditors, the heir's time limit and the coverage limit; good paraphrase.", "confidence": "high"}
+{"id": "v1-0005", "verdict": "approve", "issues": [], "reason": "Art. 795a covers who calls, when contributions are due and bankruptcy effect; facts match all versions.", "confidence": "high"}
+{"id": "v1-0006", "verdict": "approve", "issues": [], "reason": "Art. 108 OR lists when no extra period is needed incl. fixed-date deal; Art. 366 concerns pre-deadline delay, not better here.", "confidence": "medium"}
+{"id": "v1-0007", "verdict": "approve", "issues": [], "reason": "Art. 254 OR directly voids the tied insurance deal; facts supported in all three languages.", "confidence": "high"}
+{"id": "v1-0008", "verdict": "reject", "issues": ["other_article_answers"], "reason": "Whether a 2/3 decision binds a dissenting bondholder also depends on Art. 1176 OR (approval by upper cantonal authority), missing from gold.", "confidence": "medium"}
+{"id": "v1-0009", "verdict": "approve", "issues": [], "reason": "Art. 143 OR answers: absent a declaration, joint liability only in cases set by law; facts supported.", "confidence": "medium"}
+{"id": "v1-0010", "verdict": "approve", "issues": [], "reason": "Art. 337 OR covers immediate termination, written reasons on request and the no-fault incapacity exclusion.", "confidence": "high"}
+{"id": "v1-0011", "verdict": "approve", "issues": [], "reason": "Art. 874(1),(3) answers how and effect on prior debts; fact notes IT registration wording. Art. 888 majority is extra detail only.", "confidence": "medium"}
+{"id": "v1-0012", "verdict": "approve", "issues": [], "reason": "Art. 63(1),(2) OR answer recovery on error and exclusion for time-barred debt; para 3 excluded by question.", "confidence": "high"}
+{"id": "v1-0013", "verdict": "approve", "issues": [], "reason": "Art. 703 OR gives default majority and optional casting vote of the chair; facts match.", "confidence": "high"}
+{"id": "v1-0014", "verdict": "approve", "issues": [], "reason": "734b lists loan disclosures and 734a(3) by analogy gives naming rules; both needed, facts supported.", "confidence": "medium"}
+{"id": "v1-0015", "verdict": "approve", "issues": [], "reason": "Art. 945 OR gives surname requirement and bans partnership additions; facts supported in all versions.", "confidence": "high"}
+{"id": "v1-0016", "verdict": "approve", "issues": [], "reason": "Art. 340a OR covers limits, three-year cap and court reduction; facts match all versions.", "confidence": "high"}

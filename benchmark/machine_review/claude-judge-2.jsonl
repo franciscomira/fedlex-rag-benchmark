@@ -1,0 +1,16 @@
+{"id": "v1-0017", "verdict": "approve", "issues": [], "reason": "Both paragraphs of 754 answer the delegation question; facts true in DE/FR/IT; natural French.", "confidence": "high"}
+{"id": "v1-0018", "verdict": "approve", "issues": [], "reason": "40b lists the off-premises situations asked about (station = public places); facts supported in all languages.", "confidence": "medium"}
+{"id": "v1-0019", "verdict": "approve", "issues": [], "reason": "736 para 1 no 4 (10% threshold, 12% held) and para 2 (alternative solution) answer both parts.", "confidence": "high"}
+{"id": "v1-0020", "verdict": "approve", "issues": [], "reason": "40e gives period, start and postal rule; 40d needed for the required information; facts supported.", "confidence": "high"}
+{"id": "v1-0021", "verdict": "approve", "issues": [], "reason": "958b para 2 lets a GmbH under 100k proceeds use receipts/expenditure; facts supported in all versions.", "confidence": "high"}
+{"id": "v1-0022", "verdict": "approve", "issues": [], "reason": "334 paras 1-2 answer both questions directly; natural French, no copied wording.", "confidence": "high"}
+{"id": "v1-0023", "verdict": "approve", "issues": [], "reason": "964d paras 1, 2 and 5 answer the reporting, consolidation and local-authority parts.", "confidence": "high"}
+{"id": "v1-0024", "verdict": "approve", "issues": [], "reason": "423 covers self-interested management: principal takes benefits, reimburses only to extent enriched.", "confidence": "high"}
+{"id": "v1-0025", "verdict": "reject", "issues": ["fact_not_asked"], "reason": "Question states delegation was not permitted; fact 2 (authorised delegation, care in choice) answers nothing asked.", "confidence": "medium"}
+{"id": "v1-0026", "verdict": "approve", "issues": [], "reason": "1099 para 2 gives protest and start date; 1015 para 2 needed for preserving recourse; facts supported.", "confidence": "medium"}
+{"id": "v1-0027", "verdict": "approve", "issues": [], "reason": "653 paras 1-2 answer who may receive the rights and when capital increases; paraphrased well.", "confidence": "high"}
+{"id": "v1-0028", "verdict": "approve", "issues": [], "reason": "272b para 1 gives 4-year maximum for dwellings and one or two extensions; court framing excludes para 2.", "confidence": "high"}
+{"id": "v1-0029", "verdict": "approve", "issues": [], "reason": "CCA art 11 requires written form and lists mandatory content incl. early-termination table.", "confidence": "high"}
+{"id": "v1-0030", "verdict": "approve", "issues": [], "reason": "VVG 46 paras 1-2: five-year limitation and shorter contractual periods void; answers both parts.", "confidence": "high"}
+{"id": "v1-0031", "verdict": "approve", "issues": [], "reason": "VVG 57 extends the pledge to the insurance claim and restricts payment to insured once notified.", "confidence": "high"}
+{"id": "v1-0032", "verdict": "approve", "issues": [], "reason": "FADP 39 para 1 lists the conditions for statistical use and disclosure to private persons.", "confidence": "high"}

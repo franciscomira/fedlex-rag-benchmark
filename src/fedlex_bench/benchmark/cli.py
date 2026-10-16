@@ -9,6 +9,9 @@ Commands (docs/benchmark_spec.md):
 - ``validate``  run every check of spec section 10 (``--freeze`` adds the freeze conditions)
 - ``freeze``    write ``benchmark/v1`` (dev, test, test gold ids, SHA256SUMS)
 - ``baseline``  BM25 recall@10 on the dev split, per query language and index
+- ``calibration-sample``  pick the 30 calibration items for the machine judges
+- ``calibration``         human vs machine judge agreement on the calibration sample
+- ``machine-status``      per judge: approve / reject counts, items without a verdict
 
 The review app is ``review_app.py`` (Streamlit): ``uv run --group review streamlit run
 src/fedlex_bench/benchmark/review_app.py``.
@@ -20,7 +23,16 @@ import argparse
 import sys
 from collections.abc import Callable
 
-from fedlex_bench.benchmark import assemble, baseline, brief, freeze, plan, select, validate
+from fedlex_bench.benchmark import (
+    assemble,
+    baseline,
+    brief,
+    freeze,
+    machine_review,
+    plan,
+    select,
+    validate,
+)
 
 COMMANDS: dict[str, tuple[Callable[[list[str]], int], str]] = {
     "plan": (plan.run, "write benchmark/plan/slots.jsonl"),
@@ -30,12 +42,15 @@ COMMANDS: dict[str, tuple[Callable[[list[str]], int], str]] = {
     "validate": (validate.run, "check a benchmark folder against spec section 10"),
     "freeze": (freeze.run, "write benchmark/v1 from the reviewed selection (validate --freeze)"),
     "baseline": (baseline.run, "BM25 recall@10 on the dev split (never the test split)"),
+    "calibration-sample": (machine_review.run_sample, "pick the 30 calibration items (seeded)"),
+    "calibration": (machine_review.run_calibration, "human vs machine judges on the sample"),
+    "machine-status": (machine_review.run_status, "verdict counts per machine judge"),
 }
 
 
 def main(argv: list[str] | None = None) -> int:
     description = __doc__.splitlines()[0] if __doc__ else None
-    epilog = "\n".join(f"  {name:<9} {text}" for name, (_, text) in COMMANDS.items())
+    epilog = "\n".join(f"  {name:<19} {text}" for name, (_, text) in COMMANDS.items())
     ap = argparse.ArgumentParser(
         prog="python -m fedlex_bench.benchmark",
         description=description,
