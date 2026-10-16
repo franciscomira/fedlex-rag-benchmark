@@ -7,8 +7,11 @@ Commands (docs/benchmark_spec.md):
 - ``assemble``  merge writer drafts with the plan into candidate items
 - ``select``    critic verdicts + candidates -> dev / test / reserve files with final ids
 - ``validate``  run every check of spec section 10 (``--freeze`` adds the freeze conditions)
+- ``freeze``    write ``benchmark/v1`` (dev, test, test gold ids, SHA256SUMS)
+- ``baseline``  BM25 recall@10 on the dev split, per query language and index
 
-``freeze`` and the review app are not part of this package yet.
+The review app is ``review_app.py`` (Streamlit): ``uv run --group review streamlit run
+src/fedlex_bench/benchmark/review_app.py``.
 """
 
 from __future__ import annotations
@@ -17,7 +20,7 @@ import argparse
 import sys
 from collections.abc import Callable
 
-from fedlex_bench.benchmark import assemble, brief, plan, select, validate
+from fedlex_bench.benchmark import assemble, baseline, brief, freeze, plan, select, validate
 
 COMMANDS: dict[str, tuple[Callable[[list[str]], int], str]] = {
     "plan": (plan.run, "write benchmark/plan/slots.jsonl"),
@@ -25,6 +28,8 @@ COMMANDS: dict[str, tuple[Callable[[list[str]], int], str]] = {
     "assemble": (assemble.run, "merge writer drafts with the plan into candidates"),
     "select": (select.run, "apply critic verdicts, assign final ids, fill dev/test/reserve"),
     "validate": (validate.run, "check a benchmark folder against spec section 10"),
+    "freeze": (freeze.run, "write benchmark/v1 from the reviewed selection (validate --freeze)"),
+    "baseline": (baseline.run, "BM25 recall@10 on the dev split (never the test split)"),
 }
 
 

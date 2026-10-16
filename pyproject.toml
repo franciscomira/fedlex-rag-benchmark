@@ -16,6 +16,9 @@ dev = [
     "pytest>=8.2",
     "ruff>=0.5",
 ]
+review = [
+    "streamlit>=1.66.0",
+]
 
 [build-system]
 requires = ["hatchling"]
