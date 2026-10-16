@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import os
 from datetime import UTC, datetime
 
@@ -12,6 +13,7 @@ from benchmark_fixtures import make_corpus, provenance
 from fedlex_bench.benchmark import review_app as ra
 from fedlex_bench.benchmark.bm25 import build_indexes
 from fedlex_bench.benchmark.common import dumps, read_jsonl, write_jsonl
+from fedlex_bench.benchmark.validate import provenance_problems
 
 NOW = datetime(2026, 10, 20, 9, 30, 15, tzinfo=UTC)
 
@@ -373,3 +375,187 @@ def test_critic_context_omits_what_is_missing():
 def test_the_app_module_imports_without_streamlit_and_has_a_main():
     assert callable(ra.main)
     assert not hasattr(ra, "st")
+
+
+# ------------------------------------------------------------------ review aids (English helpers)
+
+
+def _write_aids(directory, aid=(), flags=(), blind=()):
+    directory.mkdir(parents=True, exist_ok=True)
+    write_jsonl(directory / "aid-1.jsonl", list(aid))
+    write_jsonl(directory / "flags.jsonl", list(flags))
+    write_jsonl(directory / "blind-1.jsonl", list(blind))
+
+
+def test_load_aids_missing_folder_degrades_to_empty(tmp_path):
+    assert ra.load_aids(tmp_path / "nope") == {}
+    assert ra.load_aids(tmp_path) == {}
+
+
+def test_load_aids_merges_aid_flags_and_blind_by_id(tmp_path):
+    _write_aids(
+        tmp_path,
+        aid=[
+            {"id": "v1-0001", "question_en": "Q?", "articles": [], "fact_support": [], "notes": "n"}
+        ],
+        flags=[{"id": "v1-0001", "flags": ["blind_miss"], "risk": 4}],
+        blind=[
+            {
+                "id": "v1-0001",
+                "answer_ids": ["220:9"],
+                "answerable_in_corpus": True,
+                "confidence": "low",
+                "note": "x",
+            }
+        ],
+    )
+    aids = ra.load_aids(tmp_path)
+    assert aids["v1-0001"]["question_en"] == "Q?"
+    assert aids["v1-0001"]["flags"] == ["blind_miss"] and aids["v1-0001"]["risk"] == 4
+    assert aids["v1-0001"]["blind"]["answer_ids"] == ["220:9"]
+
+
+def test_load_aids_ids_only_in_flags_or_blind_are_kept_and_bad_lines_skipped(tmp_path):
+    _write_aids(tmp_path, flags=[{"id": "v1-0002", "flags": ["revised"], "risk": 1}])
+    with (tmp_path / "flags.jsonl").open("a", encoding="utf-8") as fh:
+        fh.write("not json\n\n")
+    aids = ra.load_aids(tmp_path)
+    assert aids["v1-0002"]["risk"] == 1 and "question_en" not in aids["v1-0002"]
+
+
+def test_sort_by_risk_descending_then_id_and_unknown_risk_is_zero():
+    items = [_item(1), _item(2), _item(3), _item(4)]
+    aids = {"v1-0002": {"risk": 5}, "v1-0003": {"risk": 5}, "v1-0004": {"risk": 1}}
+    assert [i["id"] for i in ra.sort_items(items, aids)] == [
+        "v1-0002",
+        "v1-0003",
+        "v1-0004",
+        "v1-0001",
+    ]
+    assert [i["id"] for i in ra.sort_items(items, aids, by_risk=False)] == [
+        "v1-0001",
+        "v1-0002",
+        "v1-0003",
+        "v1-0004",
+    ]
+    assert [i["id"] for i in ra.sort_items(items, {})] == [
+        "v1-0001",
+        "v1-0002",
+        "v1-0003",
+        "v1-0004",
+    ]
+
+
+def test_flag_explanations_are_plain_english_and_unknown_flags_are_kept():
+    out = dict(ra.flag_explanations(["blind_miss", "revised", "something_new"]))
+    assert "did not find this article" in out["blind_miss"]
+    assert out["revised"].startswith("Rewritten")
+    assert out["something_new"] == "something_new"
+    assert set(ra.FLAG_TEXT) >= {
+        "blind_miss",
+        "blind_partial_crossref",
+        "blind_not_top1",
+        "solver_unsure",
+        "lang_versions_differ",
+        "critic_competing",
+        "revised",
+        "hard_or_crossref",
+        "trap_solver_says_answerable",
+        "solver_says_unanswerable",
+    }
+
+
+def test_fact_support_lines_match_facts_by_index_and_mark_missing_support():
+    item = _item(2, qtype="cross_ref")
+    aid = {
+        "fact_support": [
+            {"fact_index": 0, "supported": True, "support_en": "Sentence."},
+            {"fact_index": 1, "supported": False, "support_en": ""},
+        ]
+    }
+    lines = ra.fact_support_lines(item, aid)
+    assert [ln["supported"] for ln in lines] == [True, False]
+    assert (
+        lines[0]["support_en"] == "Sentence." and lines[0]["text"] == item["gold_facts"][0]["text"]
+    )
+    # no aid at all: facts are still listed, support unknown
+    bare = ra.fact_support_lines(item, None)
+    assert [ln["supported"] for ln in bare] == [None, None]
+    # a fact without an entry is unknown, not red
+    partial = ra.fact_support_lines(item, {"fact_support": [aid["fact_support"][0]]})
+    assert [ln["supported"] for ln in partial] == [True, None]
+
+
+def test_only_the_gold_english_articles_are_shown_in_the_aid_order():
+    assert ra.english_articles({"articles": [{"article_id": "a"}]}) == [{"article_id": "a"}]
+    assert ra.english_articles(None) == [] and ra.english_articles({}) == []
+
+
+# ------------------------------------------------------------------ expert flag and review basis
+
+
+def test_expert_flag_sets_provenance_and_leaves_review_status_alone():
+    item = _item(1)
+    snapshot = copy.deepcopy(item)
+    out = ra.apply_expert_flag(item, "Francisco", note="  article scope unclear ")
+    assert item == snapshot
+    assert out["provenance"]["expert_flag"] is True
+    assert out["provenance"]["expert_flag_note"] == "article scope unclear"
+    assert out["review_status"] == "unreviewed" and out["reviewed_by"] is None
+    no_note = ra.apply_expert_flag(item, "Francisco")
+    assert no_note["provenance"]["expert_flag"] is True
+    assert "expert_flag_note" not in no_note["provenance"]
+
+
+def test_expert_flag_keeps_an_existing_review_and_needs_a_reviewer():
+    accepted = ra.apply_review(_item(1), "accept", "F", now=NOW)
+    out = ra.apply_expert_flag(accepted, "F", note="n")
+    assert out["review_status"] == "accepted" and out["reviewed_at"] == accepted["reviewed_at"]
+    with pytest.raises(ra.ReviewError, match="reviewer"):
+        ra.apply_expert_flag(_item(1), "")
+    with pytest.raises(ra.ReviewError, match="agent"):
+        ra.apply_expert_flag(_item(1), "claude")
+
+
+def test_flag_item_writes_the_file_and_survives_a_later_review(folder):
+    out = ra.flag_item(folder, "v1-0002", "F", note="ask a lawyer")
+    assert out["provenance"]["expert_flag"] is True
+    reviewed = ra.review_item(folder, "v1-0002", "accept", "F", now=NOW)
+    assert reviewed["provenance"]["expert_flag"] is True
+    assert reviewed["provenance"]["expert_flag_note"] == "ask a lawyer"
+    with pytest.raises(ra.ReviewError, match="v1-9999"):
+        ra.flag_item(folder, "v1-9999", "F")
+
+
+def test_review_writes_the_review_basis_with_a_default():
+    out = ra.apply_review(_item(1), "accept", "F", now=NOW)
+    assert out["provenance"]["review_basis"] == "non-lawyer, reads English only"
+    assert ra.DEFAULT_REVIEW_BASIS == "non-lawyer, reads English only"
+    custom = ra.apply_review(_item(1), "reject", "F", note="n", review_basis=" lawyer ", now=NOW)
+    assert custom["provenance"]["review_basis"] == "lawyer"
+    blank = ra.apply_review(_item(1), "accept", "F", review_basis="  ", now=NOW)
+    assert blank["provenance"]["review_basis"] == ra.DEFAULT_REVIEW_BASIS
+    edited = ra.apply_review(
+        _item(1), "edit", "F", edits={"question": "Other?"}, review_basis="x", now=NOW
+    )
+    assert edited["provenance"]["review_basis"] == "x"
+
+
+def test_expert_filter_and_counter(folder):
+    ra.flag_item(folder, "v1-0002", "F")
+    ra.flag_item(folder, "v1-0005", "F", note="n")
+    items = ra.load_all(folder)
+    assert ra.expert_flagged_count(items) == 2
+    assert [i["id"] for i in ra.filter_items(items, expert_flagged=True)] == ["v1-0002", "v1-0005"]
+    assert len(ra.filter_items(items)) == 5
+    assert not ra.is_expert_flagged(items[0])
+
+
+def test_validator_accepts_the_new_provenance_keys():
+    prov = provenance("s-0001")
+    assert provenance_problems(prov) == []
+    prov.update({"expert_flag": True, "expert_flag_note": "n", "review_basis": "non-lawyer"})
+    assert provenance_problems(prov) == []
+    out = ra.apply_expert_flag(_item(1), "F", note="n")
+    assert provenance_problems(out["provenance"]) == []
+    assert json.loads(dumps(out))["provenance"]["expert_flag"] is True
