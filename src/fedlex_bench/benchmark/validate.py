@@ -116,6 +116,7 @@ TOTAL_TRAPS = 20
 CROSS_REF_FINAL_TOLERANCE = 1
 DEV_LANG_SPREAD = 2
 _ID_RE = re.compile(r"v1-\d{4}")
+_TRANSLATION_ID_RE = re.compile(r"v1-\d{4}-(?:en|de|fr|it)")
 _SHA_RE = re.compile(r"[0-9a-f]{64}")
 _AGENT_RE = re.compile(
     r"agent|claude|opus|sonnet|haiku|gpt|llm|\bai\b|\bbot\b|assistant|critic|writer|model|gemini"
@@ -334,11 +335,23 @@ def validate_items(
                 report.error("schema", label, p)
             if problems:
                 continue
-            if not _ID_RE.fullmatch(item["id"]):
-                report.error("id_format", label, "id must look like v1-0001")
-            if previous is not None and item["id"] <= previous:
-                report.error("id_order", label, f"ids must be sorted ascending (after {previous})")
-            previous = item["id"]
+            if not _ID_RE.fullmatch(item["id"]) and not (
+                item["translation_of"]
+                and _TRANSLATION_ID_RE.fullmatch(item["id"])
+                and item["id"] == f"{item['translation_of']}-{item['query_lang']}"
+            ):
+                report.error(
+                    "id_format",
+                    label,
+                    "id must look like v1-0001 (a translation: <original id>-<query_lang>)",
+                )
+            # originals first, then the translations, each group sorted by id
+            order_key = (bool(item["translation_of"]), item["id"])
+            if previous is not None and order_key <= previous:
+                report.error(
+                    "id_order", label, f"ids must be sorted ascending (after {previous[1]})"
+                )
+            previous = order_key
             seen_ids[item["id"]] += 1
             if item["split"] != fname:
                 report.error("file_split", label, f"split {item['split']!r} in {fname}.jsonl")

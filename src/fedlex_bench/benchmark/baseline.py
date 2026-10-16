@@ -88,8 +88,15 @@ def _cell(values: list[float]) -> dict:
     return {"n": len(values), "recall": round(sum(values) / len(values), 4)}
 
 
-def summarise(items: list[dict], indexes: Mapping[str, Bm25Index]) -> dict:
-    """Recall@10 per index and query language, and overall. Traps are counted and left out."""
+def summarise(
+    items: list[dict], indexes: Mapping[str, Bm25Index], include_translations: bool = False
+) -> dict:
+    """Recall@10 per index and query language, and overall. Traps are counted and left out.
+    Translations (``translation_of`` set) are left out of the table unless
+    ``include_translations``; their number is reported either way (``n_translations``)."""
+    n_translations = sum(1 for i in items if i.get("translation_of") and not i["is_trap"])
+    if not include_translations:
+        items = [i for i in items if not i.get("translation_of")]
     answerable = [i for i in items if not i["is_trap"]]
     per_item = [(i["query_lang"], item_recall(i, indexes)) for i in answerable]
     table: dict[str, dict] = {}
@@ -101,6 +108,8 @@ def summarise(items: list[dict], indexes: Mapping[str, Bm25Index]) -> dict:
         "k": K,
         "n_items": len(answerable),
         "n_traps_excluded": len(items) - len(answerable),
+        "n_translations": n_translations,
+        "translations_included": include_translations,
         "recall_at_10": table,
     }
 
@@ -133,6 +142,11 @@ def run(argv: list[str] | None = None) -> int:
     ap.add_argument("--dir", type=Path, default=SELECTED_DIR, help="folder with dev.jsonl")
     ap.add_argument("--parquet", type=Path, default=ARTICLES_PARQUET)
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    ap.add_argument(
+        "--include-translations",
+        action="store_true",
+        help="count translated items (translation_of set) in the table; default: leave them out",
+    )
     args = ap.parse_args(argv)
     if args.split != "dev":
         print(
@@ -142,7 +156,11 @@ def run(argv: list[str] | None = None) -> int:
         return 2
     dev_path = args.dir / "dev.jsonl"
     items = read_jsonl(dev_path)
-    summary = summarise(items, build_all_indexes(load_corpus(args.parquet)))
+    summary = summarise(
+        items,
+        build_all_indexes(load_corpus(args.parquet)),
+        include_translations=args.include_translations,
+    )
     summary.update(split="dev", dev_sha256=sha256_file(dev_path), note=NOTE)
     print(format_table(summary))
     print(

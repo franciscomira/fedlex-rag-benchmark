@@ -13,6 +13,9 @@ Commands (docs/benchmark_spec.md):
 - ``calibration-sample``  pick the 30 calibration items for the machine judges
 - ``calibration``         human vs machine judge agreement on the calibration sample
 - ``machine-status``      per judge: approve / reject counts, items without a verdict
+- ``translations-plan``   pick the parents of the parallel subset, write plan and translator input
+- ``translations-apply``  add translator drafts as ``translation_of`` items (spec section 9)
+- ``backfill``            replace selected items by reserve items of the same cell
 
 The review app is ``review_app.py`` (Streamlit): ``uv run --group review streamlit run
 src/fedlex_bench/benchmark/review_app.py``.
@@ -26,6 +29,7 @@ from collections.abc import Callable
 
 from fedlex_bench.benchmark import (
     assemble,
+    backfill,
     baseline,
     brief,
     freeze,
@@ -33,6 +37,7 @@ from fedlex_bench.benchmark import (
     plan,
     revisions,
     select,
+    translations,
     validate,
 )
 
@@ -51,6 +56,15 @@ COMMANDS: dict[str, tuple[Callable[[list[str]], int], str]] = {
         "swap revised candidates into the selection (resets review)",
     ),
     "machine-status": (machine_review.run_status, "verdict counts per machine judge"),
+    "translations-plan": (
+        translations.run_plan,
+        "choose the parents of the parallel translated subset (24 items, 72 rows)",
+    ),
+    "translations-apply": (
+        translations.run_apply,
+        "add the translators' drafts to the selection as translation items",
+    ),
+    "backfill": (backfill.run, "replace selected items by reserve items of the same cell"),
 }
 
 
