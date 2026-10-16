@@ -238,3 +238,14 @@ def test_cli_wiring(selected, items, tmp_path, capsys):
     assert item["id"] in out and "unreviewed" in out
     sfile.write_text(json.dumps(["s-nope"]), encoding="utf-8")
     assert cli.main(argv) == 1
+
+
+def test_a_revision_clears_the_stale_review_basis_but_keeps_the_expert_flag(selected, items):
+    item = first(items, is_trap=False, split="test")
+    item["provenance"]["review_basis"] = "non-lawyer, reads English only"
+    item["provenance"]["expert_flag"] = True
+    put(selected, items)
+    cand = candidate_for(item)
+    revisions.apply_revisions([cand], [cand["slot_id"]], selected)
+    prov = load(selected)[item["id"]]["provenance"]
+    assert "review_basis" not in prov and prov["expert_flag"] is True

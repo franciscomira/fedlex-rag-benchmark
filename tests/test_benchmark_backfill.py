@@ -223,3 +223,13 @@ def test_command_reads_twins_file(folders, tmp_path):
     argv[argv.index("--twins") + 1] = str(twins)
     assert cli.main(argv) == 0
     assert read_jsonl(s / "test.jsonl")[0]["gold_article_ids"] != ["220:22"]
+
+
+def test_a_replacement_does_not_inherit_a_stale_review_basis(selected, reserve):
+    stale = reserve["test"][2]
+    stale["provenance"]["review_basis"] = "non-lawyer, reads English only"
+    sel, _, _, _ = run_core(["v1-0002"], selected, reserve)
+    new = next(i for i in sel["test"] if i["id"] == "v1-0002")
+    assert new["provenance"]["slot_id"] == "s-0102"
+    assert "review_basis" not in new["provenance"]
+    assert new["review_status"] == "unreviewed" and new["reviewed_by"] is None

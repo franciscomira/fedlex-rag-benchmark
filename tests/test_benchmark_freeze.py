@@ -8,9 +8,12 @@ import json
 
 import pytest
 
-from benchmark_fixtures import make_corpus, make_valid_items
+from benchmark_fixtures import make_corpus, make_valid_items, words
 from fedlex_bench.benchmark import cli, freeze
+from fedlex_bench.benchmark import machine_review as mr
+from fedlex_bench.benchmark.bm25 import build_indexes
 from fedlex_bench.benchmark.common import read_jsonl, write_jsonl
+from fedlex_bench.benchmark.translations import build_translation
 
 
 @pytest.fixture(scope="module")
@@ -64,12 +67,13 @@ def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def test_freeze_writes_the_four_files(selected, tmp_path, parquet, capsys):
+def test_freeze_writes_the_five_files(selected, tmp_path, parquet, capsys):
     out = tmp_path / "v1"
     assert run(selected, out, parquet) == 0
     assert sorted(p.name for p in out.iterdir()) == [
         "SHA256SUMS",
         "dev.jsonl",
+        "dev_gold_articles.txt",
         "test.jsonl",
         "test_gold_articles.txt",
     ]
@@ -78,7 +82,7 @@ def test_freeze_writes_the_four_files(selected, tmp_path, parquet, capsys):
         ids = [i["id"] for i in read_jsonl(out / f"{split}.jsonl")]
         assert ids == sorted(ids)
     printed = capsys.readouterr().out
-    for name in ("dev.jsonl", "test.jsonl", "test_gold_articles.txt"):
+    for name in ("dev.jsonl", "dev_gold_articles.txt", "test.jsonl", "test_gold_articles.txt"):
         assert sha(out / name) in printed
 
 
@@ -98,7 +102,21 @@ def test_the_gold_file_lists_the_sorted_unique_test_gold_ids(selected, tmp_path,
     }
 
 
-def test_sha256sums_has_the_three_files_sorted_with_lf(selected, tmp_path, parquet):
+def test_the_dev_gold_file_lists_the_sorted_unique_dev_gold_ids(selected, tmp_path, parquet):
+    from fedlex_bench.benchmark.common import id_key
+
+    out = tmp_path / "v1"
+    run(selected, out, parquet)
+    raw = (out / "dev_gold_articles.txt").read_bytes()
+    assert b"\r" not in raw and raw.endswith(b"\n")
+    lines = raw.decode("utf-8").split("\n")[:-1]
+    expected = {g for it in read_jsonl(selected / "dev.jsonl") for g in it["gold_article_ids"]}
+    assert set(lines) == expected and len(lines) == len(expected)
+    assert lines == sorted(lines, key=id_key)
+    assert not set(lines) & set((out / "test_gold_articles.txt").read_text().split())
+
+
+def test_sha256sums_has_the_files_sorted_with_lf(selected, tmp_path, parquet):
     out = tmp_path / "v1"
     run(selected, out, parquet)
     raw = (out / "SHA256SUMS").read_bytes()
@@ -106,7 +124,7 @@ def test_sha256sums_has_the_three_files_sorted_with_lf(selected, tmp_path, parqu
     lines = raw.decode("utf-8").split("\n")[:-1]
     assert lines == [
         f"{sha(out / name)}  {name}"
-        for name in ("dev.jsonl", "test.jsonl", "test_gold_articles.txt")
+        for name in ("dev.jsonl", "dev_gold_articles.txt", "test.jsonl", "test_gold_articles.txt")
     ]
 
 
@@ -208,7 +226,12 @@ def write_verdicts(mdir, name, items, reject=()):
     mdir.mkdir(parents=True, exist_ok=True)
     lines = [
         json.dumps(
-            {"id": i["id"], "verdict": "reject" if i["id"] in reject else "approve", "issues": []}
+            {
+                "id": i["id"],
+                "verdict": "reject" if i["id"] in reject else "approve",
+                "issues": [],
+                "content_sha256": mr.content_sha256(i),
+            }
         )
         for i in items
     ]
@@ -357,3 +380,119 @@ def test_validate_freeze_takes_the_same_option(mixed, tmp_path, parquet, capsys)
     out = capsys.readouterr().out
     assert code == 0, out
     assert "machine-approved only 4" in out
+
+
+def test_a_verdict_not_bound_to_the_current_text_refuses_the_freeze(
+    mixed, tmp_path, parquet, capsys
+):
+    folder, mdir, items, machine = mixed
+    machine[0]["question"] = machine[0]["question"] + " (revised)"
+    put(folder, items)
+    out = tmp_path / "v1"
+    assert run_machine(folder, out, parquet, mdir) == 1
+    printed = capsys.readouterr().out
+    assert "content_sha256" in printed and machine[0]["id"] in printed
+    assert not out.exists()
+
+
+def test_a_verdict_without_a_hash_refuses_the_freeze(mixed, tmp_path, parquet, capsys):
+    folder, mdir, items, machine = mixed
+    lines = [json.loads(x) for x in (mdir / "j-1.jsonl").read_text().splitlines()]
+    for r in lines:
+        r.pop("content_sha256")
+    (mdir / "j-1.jsonl").write_text("".join(json.dumps(r) + "\n" for r in lines))
+    out = tmp_path / "v1"
+    assert run_machine(folder, out, parquet, mdir) == 1
+    printed = capsys.readouterr().out
+    assert all(m["id"] in printed for m in machine) and not out.exists()
+
+
+# ------------------------------------------------------------------ translations
+
+
+def add_translations(items, corpus, n=3, parents=None):
+    """Append ``n`` accepted translations (originals stay first); returns them."""
+    indexes = build_indexes(corpus)
+    singles = (
+        parents
+        or [
+            i
+            for i in items
+            if i["qtype"] == "single" and not i["is_trap"] and not i["translation_of"]
+        ][:n]
+    )
+    out = []
+    for parent in singles:
+        lang = "fr" if parent["query_lang"] != "fr" else "de"
+        t = build_translation(
+            parent,
+            lang,
+            words(f"tr/{parent['id']}") + "?",
+            indexes,
+            plan_sha256="0" * 64,
+            translated_on="2026-10-17",
+            model_note="test",
+        )
+        t.update(
+            review_status="accepted",
+            reviewed_by="Francisco Mira",
+            reviewed_at="2026-10-20T08:00:00Z",
+        )
+        out.append(t)
+    items.extend(out)
+    return out
+
+
+def test_frozen_files_put_originals_first_then_translations_and_validate_clean(
+    items, corpus, tmp_path, parquet, capsys
+):
+    translations = add_translations(items, corpus)
+    folder = tmp_path / "selected"
+    put(folder, items)
+    out = tmp_path / "v1"
+    assert run(folder, out, parquet) == 0, capsys.readouterr().out
+    for split in ("dev", "test"):
+        rows = read_jsonl(out / f"{split}.jsonl")
+        keys = [(bool(r["translation_of"]), r["id"]) for r in rows]
+        assert keys == sorted(keys)
+    # the point of the test: plain id order would interleave translations with originals
+    plain = [r["id"] for r in read_jsonl(out / "dev.jsonl") + read_jsonl(out / "test.jsonl")]
+    assert any(
+        [r["id"] for r in read_jsonl(out / f"{sp}.jsonl")]
+        != sorted(r["id"] for r in read_jsonl(out / f"{sp}.jsonl"))
+        for sp in ("dev", "test")
+    ), plain
+    assert any(r["translation_of"] for s in ("dev", "test") for r in read_jsonl(out / f"{s}.jsonl"))
+    capsys.readouterr()
+    code = cli.main(["validate", "--dir", str(out), "--parquet", str(parquet), "--freeze"])
+    printed = capsys.readouterr().out
+    assert code == 0 and "0 error(s)" in printed, printed
+    assert len(translations) == 3
+
+
+def test_freeze_refuses_a_translation_whose_parent_is_expert_flagged(
+    items, corpus, tmp_path, parquet, capsys
+):
+    t = add_translations(items, corpus, n=1)[0]
+    parent = next(i for i in items if i["id"] == t["translation_of"])
+    parent["provenance"]["expert_flag"] = True  # the human accepted it anyway
+    folder = tmp_path / "selected"
+    put(folder, items)
+    out = tmp_path / "v1"
+    assert run(folder, out, parquet) == 1 and not out.exists()
+    printed = capsys.readouterr().out
+    assert t["id"] in printed and parent["id"] in printed and "expert-flagged" in printed
+
+
+def test_freeze_refuses_a_translation_whose_parent_is_human_rejected(
+    items, corpus, tmp_path, parquet, capsys
+):
+    t = add_translations(items, corpus, n=1)[0]
+    parent = next(i for i in items if i["id"] == t["translation_of"])
+    parent.update(review_status="rejected", review_note="wrong")
+    folder = tmp_path / "selected"
+    put(folder, items)
+    out = tmp_path / "v1"
+    assert run(folder, out, parquet) == 1 and not out.exists()
+    printed = capsys.readouterr().out
+    assert t["id"] in printed and "human-rejected" in printed

@@ -4,7 +4,12 @@ Judges write ``benchmark/machine_review/<judge>-<n>.jsonl`` (the judge name is t
 before the last ``-<n>``), one record per item::
 
     {"id": "v1-0001", "verdict": "approve" | "reject", "issues": [...], "reason": "...",
-     "confidence": 0.9}
+     "confidence": 0.9, "content_sha256": "<hash>"}
+
+``content_sha256`` binds a verdict to the text the judge saw: the sha256 of the canonical JSON
+(sorted keys, no ASCII escaping) of ``{"question": ..., "gold_facts": ...}``, see
+:func:`content_sha256`. A verdict whose hash is missing or differs from the item's current text
+does not count for the freeze. ``machine-review-bind`` fills the hash from the judge input files.
 
 Machine review never touches an item's ``review_status``: that stays human-only. The verdicts are
 only (a) shown in the review app, (b) compared with the human on the calibration sample and
@@ -15,23 +20,36 @@ Commands (``python -m fedlex_bench.benchmark <command>``):
 - ``calibration-sample``  pick the 30 calibration items (deterministic, :func:`calibration_sample`)
 - ``calibration``         compare the human-reviewed sample items with each judge
 - ``machine-status``      per judge: approve / reject counts and items without a verdict
+- ``machine-review-bind`` one-off: write ``content_sha256`` into the sidecar records
 
-All of them read ``benchmark/selected`` and never write there.
+All of them read ``benchmark/selected`` and never write there; only ``machine-review-bind``
+writes (the sidecar files, atomically).
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import random
 import re
+import tempfile
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from fedlex_bench.benchmark.common import BENCHMARK_DIR, SELECTED_DIR, SPLITS, dumps, read_jsonl
+from fedlex_bench.benchmark.common import (
+    BENCHMARK_DIR,
+    SELECTED_DIR,
+    SPLITS,
+    canonical_sha256,
+    dumps,
+    read_jsonl,
+)
+from fedlex_bench.ingest import PROJECT_ROOT
 
 MACHINE_DIR = BENCHMARK_DIR / "machine_review"
+AIDS_DIR = PROJECT_ROOT / "data" / "processed" / "review_aids"
 SAMPLE_NAME = "calibration_sample.json"
 REPORT_NAME = "calibration_report.json"
 SAMPLE_SEED = 20261016
@@ -73,6 +91,8 @@ def _record_problem(rec: object) -> str | None:
         return "issues must be a list of strings"
     if not isinstance(rec.get("reason", ""), str):
         return "reason must be a string"
+    if rec.get("content_sha256") is not None and not isinstance(rec["content_sha256"], str):
+        return "content_sha256 must be a string"
     return None
 
 
@@ -120,6 +140,7 @@ def load_verdicts(
                 "issues": list(rec.get("issues", [])),
                 "reason": rec.get("reason", ""),
                 "confidence": rec.get("confidence"),
+                "content_sha256": rec.get("content_sha256"),
             }
             verdicts.setdefault(item_id, {})[judge] = clean
     return verdicts, errors
@@ -135,14 +156,35 @@ def judges_covering(verdicts: Mapping[str, Mapping[str, dict]], ids: Iterable[st
     return [j for j in judges_of(verdicts) if all(j in verdicts.get(i, {}) for i in ids)]
 
 
-def machine_approved(
+def content_sha256(item: Mapping) -> str:
+    """Hash of what a judge judges: the canonical JSON of the item's question and gold facts."""
+    return canonical_sha256(
+        {"question": item.get("question"), "gold_facts": item.get("gold_facts")}
+    )
+
+
+def _approved_by_all(
     item_id: str, judges_required: Iterable[str], verdicts: Mapping[str, Mapping[str, dict]]
 ) -> bool:
-    """True only if every required judge has an ``approve`` verdict for the item (no required
-    judge at all: False)."""
     required = list(judges_required)
     by_judge = verdicts.get(item_id, {})
     return bool(required) and all(by_judge.get(j, {}).get("verdict") == "approve" for j in required)
+
+
+def machine_approved(
+    item_id: str,
+    judges_required: Iterable[str],
+    verdicts: Mapping[str, Mapping[str, dict]],
+    current_sha256: str | None,
+) -> bool:
+    """True only if every required judge has an ``approve`` verdict for the item and each verdict
+    carries ``content_sha256`` equal to ``current_sha256`` (the hash of the item's text now). A
+    missing or different hash, or no hash to compare with: False. No required judge: False."""
+    required = list(judges_required)
+    if not current_sha256 or not _approved_by_all(item_id, required, verdicts):
+        return False
+    by_judge = verdicts[item_id]
+    return all(by_judge[j].get("content_sha256") == current_sha256 for j in required)
 
 
 # ------------------------------------------------------------------ item helpers
@@ -172,11 +214,15 @@ class MachineAcceptance:
     """The machine route into a freeze. ``judges`` are the judges that cover every item (all of
     them must approve); ``ids`` the items that are not human-rejected, not expert-flagged and
     approved by every such judge (this includes human-reviewed items: the freeze counts those as
-    human). ``errors`` is non-empty when the route cannot be used at all."""
+    human). ``unbound`` (sorted) are the not-human-reviewed items that every judge approved but
+    whose verdict has no ``content_sha256`` or one that differs from the item's current text;
+    they are also reported in ``errors``. ``errors`` is non-empty when the route cannot be used
+    at all."""
 
     judges: list[str] = field(default_factory=list)
     ids: set[str] = field(default_factory=set)
     errors: list[str] = field(default_factory=list)
+    unbound: list[str] = field(default_factory=list)
 
 
 def machine_acceptance(files: Mapping[str, list[dict]], directory: Path) -> MachineAcceptance:
@@ -192,13 +238,27 @@ def machine_acceptance(files: Mapping[str, list[dict]], directory: Path) -> Mach
             + (f" (found: {', '.join(found)})" if found else " (no verdict files found)")
         )
         return acc
+    candidates = [
+        i for i in items if i.get("review_status") != "rejected" and not is_expert_flagged(i)
+    ]
     acc.ids = {
         i["id"]
-        for i in items
-        if i.get("review_status") != "rejected"
-        and not is_expert_flagged(i)
-        and machine_approved(i["id"], acc.judges, verdicts)
+        for i in candidates
+        if machine_approved(i["id"], acc.judges, verdicts, content_sha256(i))
     }
+    acc.unbound = sorted(
+        i["id"]
+        for i in candidates
+        if i["id"] not in acc.ids
+        and i.get("review_status") not in HUMAN_STATUSES
+        and _approved_by_all(i["id"], acc.judges, verdicts)
+    )
+    if acc.unbound:
+        acc.errors.append(
+            f"{len(acc.unbound)} machine verdict(s) are not bound to the current item text "
+            f"(content_sha256 missing or different; the item changed after judging or "
+            f"machine-review-bind has not run): {', '.join(acc.unbound)}"
+        )
     return acc
 
 
@@ -370,6 +430,117 @@ def machine_status(items: Iterable[Mapping], verdicts: Mapping[str, Mapping[str,
     return {"n_items": len(ids), "judges": judges}
 
 
+# ------------------------------------------------------------------ binding (one-off)
+
+_JUDGE_INPUT = re.compile(r"^judge-in-(?:(?P<tag>[a-z0-9]+)-)?(?P<n>\d+)\.jsonl$")
+_TAG_ORDER = ("r2", "r3", "bf", "tr")  # the later rounds, in the order they were judged
+
+
+def judge_input_files(directory: Path) -> list[Path]:
+    """The ``judge-in-*.jsonl`` files, oldest round first: ``judge-in-<n>`` (numeric), then the
+    tagged rounds ``r2``, ``r3``, ``bf``, ``tr`` (an unknown tag after those, by name), each by
+    ``<n>``. A later file overrides an earlier one for the same id."""
+    keyed = []
+    for path in directory.glob("judge-in-*.jsonl") if directory.is_dir() else []:
+        m = _JUDGE_INPUT.match(path.name)
+        if not m:
+            continue
+        tag = m.group("tag")
+        if tag is None:
+            rank: tuple = (0, "")
+        elif tag in _TAG_ORDER:
+            rank = (1 + _TAG_ORDER.index(tag), "")
+        else:
+            rank = (1 + len(_TAG_ORDER), tag)
+        keyed.append(((*rank, int(m.group("n"))), path))
+    return [p for _, p in sorted(keyed)]
+
+
+def judged_hashes(directory: Path) -> dict[str, tuple[str, str]]:
+    """``{item_id: (content_sha256, file name)}`` of the text the judges were shown (the latest
+    judge input file wins). Gold facts are normalised to ``{"text", "article_id"}`` as items
+    store them; a trap's input has no ``gold_facts`` and counts as ``[]`` (as stored)."""
+    out: dict[str, tuple[str, str]] = {}
+    for path in judge_input_files(directory):
+        for row in read_jsonl(path):
+            facts = [
+                {"text": f["text"], "article_id": f["article_id"]}
+                for f in row.get("gold_facts") or []
+            ]
+            out[row["id"]] = (
+                content_sha256({"question": row["question"], "gold_facts": facts}),
+                path.name,
+            )
+    return out
+
+
+@dataclass
+class BindReport:
+    bound: list[str] = field(default_factory=list)  # ids that now carry the right hash
+    changed: dict[str, str] = field(default_factory=dict)  # id -> judge input file (text differs)
+    no_input: list[str] = field(default_factory=list)  # ids no judge input file shows
+    files_written: list[str] = field(default_factory=list)
+
+    @property
+    def unbound(self) -> list[str]:
+        return sorted([*self.changed, *self.no_input])
+
+
+def _replace_atomic(path: Path, data: bytes) -> None:
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.stem}.", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(data)
+        os.replace(tmp_name, path)
+    except BaseException:
+        Path(tmp_name).unlink(missing_ok=True)
+        raise
+
+
+def bind_sidecars(
+    items: Iterable[Mapping], machine_dir: Path, aids_dir: Path, dry_run: bool = False
+) -> BindReport:
+    """Write ``content_sha256`` into every sidecar record whose judged text (judge input files)
+    equals the item's current text. A record that was judged on other text, or that no judge
+    input shows, is reported and left without a hash (so it fails the freeze). A hash that is
+    already right is kept; a record is only rewritten when it gains a hash."""
+    current = {i["id"]: content_sha256(i) for i in items}
+    judged = judged_hashes(aids_dir)
+    report = BindReport()
+    for path in sorted(machine_dir.glob("*.jsonl")) if machine_dir.is_dir() else []:
+        if judge_of(path) is None:
+            continue
+        raw = path.read_bytes()
+        lines, dirty = [], False
+        for line in raw.decode("utf-8").split("\n"):
+            if not line.strip():
+                lines.append(line)
+                continue
+            rec = json.loads(line)
+            item_id = rec.get("id")
+            if item_id not in current:
+                lines.append(line)
+                continue
+            if item_id not in judged:
+                report.no_input.append(item_id)
+            elif judged[item_id][0] != current[item_id]:
+                report.changed[item_id] = judged[item_id][1]
+            else:
+                report.bound.append(item_id)
+                if rec.get("content_sha256") != current[item_id]:
+                    rec["content_sha256"] = current[item_id]
+                    line = json.dumps(rec)
+                    dirty = True
+            lines.append(line)
+        if dirty:
+            report.files_written.append(path.name)
+            if not dry_run:
+                _replace_atomic(path, "\n".join(lines).encode("utf-8"))
+    report.bound.sort()
+    report.no_input.sort()
+    return report
+
+
 # ------------------------------------------------------------------ commands
 
 
@@ -436,6 +607,29 @@ def run_calibration(argv: list[str] | None = None) -> int:
     for i in report["missing_from_selection"]:
         print(f"WARNING sample id {i} is not in the selection")
     return 1 if errors else 0
+
+
+def run_bind(argv: list[str] | None = None) -> int:
+    ap = _parser(
+        "machine-review-bind", "one-off: write content_sha256 into the machine review sidecars"
+    )
+    ap.add_argument(
+        "--aids-dir", type=Path, default=AIDS_DIR, help="folder with the judge-in-*.jsonl files"
+    )
+    ap.add_argument("--dry-run", action="store_true", help="report only, write nothing")
+    args = ap.parse_args(argv)
+    items = load_items(args.dir)
+    report = bind_sidecars(items, args.machine_dir, args.aids_dir, dry_run=args.dry_run)
+    for item_id, name in sorted(report.changed.items()):
+        print(f"UNBOUND {item_id}: the text the judge saw ({name}) differs from the item now")
+    for item_id in report.no_input:
+        print(f"UNBOUND {item_id}: no judge input file shows this item")
+    verb = "would write" if args.dry_run else "wrote"
+    print(
+        f"bound {len(report.bound)} verdict(s), unbound {len(report.unbound)}; "
+        f"{verb} {len(report.files_written)} sidecar file(s)"
+    )
+    return 0
 
 
 def run_status(argv: list[str] | None = None) -> int:

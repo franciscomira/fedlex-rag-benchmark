@@ -3,7 +3,10 @@
 Refuses unless ``validate --freeze`` passes on the selected folder, and refuses while a rejected
 item is still in it (a rejected item must be replaced from the reserve first; the message names
 the short cells). Writes ``dev.jsonl`` and ``test.jsonl`` (items sorted by id),
-``test_gold_articles.txt`` (sorted unique gold ids of the test split) and ``SHA256SUMS``.
+``dev_gold_articles.txt`` and ``test_gold_articles.txt`` (sorted unique gold ids of the split)
+and ``SHA256SUMS``. Originals come first, then the translations, each group sorted by id (the
+order ``validate`` requires). It refuses to include a translation whose parent is expert-flagged
+or human-rejected.
 Refuses to overwrite an existing ``benchmark/v1`` without ``--force``. Tagging the freeze commit
 (``benchmark-v1``) is a manual step.
 
@@ -39,13 +42,15 @@ from fedlex_bench.benchmark.machine_review import (
     review_coverage,
 )
 from fedlex_bench.benchmark.select import cell_quota
+from fedlex_bench.benchmark.translations import parent_block_reason
 from fedlex_bench.benchmark.validate import FROZEN_STATUSES, Report, load_dir, validate_dir
 from fedlex_bench.chunk import ARTICLES_PARQUET
 
 GOLD_FILE = "test_gold_articles.txt"
+DEV_GOLD_FILE = "dev_gold_articles.txt"
 SUMS_FILE = "SHA256SUMS"
 COVERAGE_FILE = "REVIEW_COVERAGE.json"
-FILES = ("dev.jsonl", "test.jsonl", GOLD_FILE)
+FILES = ("dev.jsonl", "test.jsonl", GOLD_FILE, DEV_GOLD_FILE)
 
 
 def cell_label(item: dict) -> str:
@@ -66,6 +71,18 @@ def short_cells(items: list[dict]) -> dict[str, dict]:
     return {k: v for k, v in sorted(cells.items()) if v["rejected"]}
 
 
+def blocked_translations(items: list[dict]) -> list[str]:
+    """One line per translation whose parent is expert-flagged or human-rejected, sorted."""
+    by_id = {i["id"]: i for i in items}
+    out = []
+    for it in sorted(items, key=lambda i: i["id"]):
+        parent = by_id.get(it.get("translation_of") or "")
+        reason = parent_block_reason(parent) if parent is not None else None
+        if reason:
+            out.append(f"{it['id']}: parent {parent['id']} is {reason}")
+    return out
+
+
 def render(
     files: dict[str, list[dict]], machine_only: frozenset[str] = frozenset()
 ) -> dict[str, bytes]:
@@ -80,11 +97,12 @@ def render(
                 if i["review_status"] in FROZEN_STATUSES
                 or (i["review_status"] == "unreviewed" and i["id"] in machine_only)
             ),
-            key=lambda i: i["id"],
+            key=lambda i: (bool(i.get("translation_of")), i["id"]),
         )
         out[f"{split}.jsonl"] = "".join(dumps(i) + "\n" for i in kept).encode("utf-8")
-    gold = {g for it in files["test"] for g in it["gold_article_ids"]}
-    out[GOLD_FILE] = "".join(g + "\n" for g in sorted(gold, key=id_key)).encode("utf-8")
+    for split, name in (("test", GOLD_FILE), ("dev", DEV_GOLD_FILE)):
+        gold = {g for it in files[split] for g in it["gold_article_ids"]}
+        out[name] = "".join(g + "\n" for g in sorted(gold, key=id_key)).encode("utf-8")
     sums = "".join(f"{hashlib.sha256(out[n]).hexdigest()}  {n}\n" for n in sorted(FILES))
     out[SUMS_FILE] = sums.encode("utf-8")
     return out
@@ -105,7 +123,17 @@ def freeze(
             print(f"ERROR   {v}")
         print("freeze refused: the selected folder cannot be read")
         return 1
-    rejected = short_cells([i for split in SPLITS for i in files[split]])
+    all_items = [i for split in SPLITS for i in files[split]]
+    blocked = blocked_translations(all_items)
+    if blocked:
+        for line in blocked:
+            print(f"BLOCKED {line}")
+        print(
+            "freeze refused: translations of an expert-flagged or human-rejected item cannot "
+            "be frozen; remove them from the selected folder first"
+        )
+        return 1
+    rejected = short_cells(all_items)
     if rejected:
         for label, cell in rejected.items():
             print(

@@ -516,3 +516,59 @@ def test_baseline_leaves_translations_out_unless_asked(items, indexes):
     assert with_t["n_items"] == 2 and with_t["n_translations"] == 1
     assert with_t["translations_included"] is True
     assert json.dumps(default["recall_at_10"])  # serialisable
+
+
+# ------------------------------------------------------------------ parents that became unusable
+
+
+@pytest.mark.parametrize(
+    ("change", "reason"),
+    [
+        (lambda it: it["provenance"].update(expert_flag=True), "expert-flagged"),
+        (lambda it: it.update(review_status="rejected"), "human-rejected"),
+    ],
+)
+def test_apply_skips_translations_of_a_flagged_or_rejected_parent(
+    items, selected, plan, indexes, change, reason, capsys
+):
+    parent_id = plan[0]["parent_id"]
+    parent = next(i for i in items if i["id"] == parent_id)
+    assert translations.parent_block_reason(parent) is None
+    change(parent)
+    assert translations.parent_block_reason(parent) == reason
+    put(selected, items)
+    result = apply(plan, drafts_for(plan), selected, indexes)
+    gone = {f"{parent_id}-{r['target_lang']}" for r in plan if r["parent_id"] == parent_id}
+    assert len(gone) == 3 and set(result["skipped"]) == gone
+    assert len(result["added"]) == 72 - 3 and not gone & set(result["added"])
+    written = {r["id"] for r in load_all(selected)}
+    assert not gone & written
+
+
+def test_apply_command_reports_skipped_translations(
+    items, selected, plan, parquet, tmp_path, capsys
+):
+    parent = next(i for i in items if i["id"] == plan[0]["parent_id"])
+    parent["provenance"]["expert_flag"] = True
+    put(selected, items)
+    plan_path = tmp_path / "plan.jsonl"
+    write_jsonl(plan_path, plan)
+    drafts = tmp_path / "drafts"
+    write_drafts(drafts, drafts_for(plan))
+    code = cli.main(
+        [
+            "translations-apply",
+            "--plan",
+            str(plan_path),
+            "--drafts",
+            str(drafts),
+            "--dir",
+            str(selected),
+            "--parquet",
+            str(parquet),
+            "--date",
+            "2026-10-20",
+        ]
+    )
+    out = capsys.readouterr().out
+    assert code == 0 and out.count("skipped") == 3 and "added 69 translation(s)" in out

@@ -14,7 +14,7 @@ are skipped when
 - a gold article is a twin article (``benchmark/plan/twins.jsonl``): twins are not allowed as gold;
 - the item is expert-flagged or human-rejected.
 
-The new item is ``unreviewed`` (reviewer fields cleared) and carries
+The new item is ``unreviewed`` (reviewer fields and ``provenance.review_basis`` cleared) and carries
 ``provenance.backfill = {"replaces": <old id>}``. The used reserve item is removed from the
 reserve file. If any id has no replacement, or has translations, nothing is written. An id whose
 selected item is itself a backfill is skipped (so running twice changes nothing); ``--again``
@@ -162,7 +162,9 @@ def backfill_items(
             reviewed_at=None,
             review_note=None,
         )
-        new["provenance"] = {**new.get("provenance", {}), "backfill": {"replaces": item_id}}
+        prov = {**new.get("provenance", {}), "backfill": {"replaces": item_id}}
+        prov.pop("review_basis", None)  # describes a review of other text
+        new["provenance"] = prov
         used_gold.update(new["gold_article_ids"])
         removed[split].append({**old, "removal_reason": reason})
         sel[split][n] = new

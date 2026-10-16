@@ -13,6 +13,7 @@ Commands (docs/benchmark_spec.md):
 - ``calibration-sample``  pick the 30 calibration items for the machine judges
 - ``calibration``         human vs machine judge agreement on the calibration sample
 - ``machine-status``      per judge: approve / reject counts, items without a verdict
+- ``machine-review-bind``  one-off: bind machine verdicts to the item text (content_sha256)
 - ``translations-plan``   pick the parents of the parallel subset, write plan and translator input
 - ``translations-apply``  add translator drafts as ``translation_of`` items (spec section 9)
 - ``backfill``            replace selected items by reserve items of the same cell
@@ -56,6 +57,10 @@ COMMANDS: dict[str, tuple[Callable[[list[str]], int], str]] = {
         "swap revised candidates into the selection (resets review)",
     ),
     "machine-status": (machine_review.run_status, "verdict counts per machine judge"),
+    "machine-review-bind": (
+        machine_review.run_bind,
+        "one-off: write content_sha256 into the machine review sidecars",
+    ),
     "translations-plan": (
         translations.run_plan,
         "choose the parents of the parallel translated subset (24 items, 72 rows)",

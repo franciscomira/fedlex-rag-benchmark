@@ -126,6 +126,16 @@ def machine_rejected_ids(directory: Path) -> set[str]:
     }
 
 
+def parent_block_reason(parent: Mapping) -> str | None:
+    """Why a translation of ``parent`` must not be made or frozen: the parent is expert-flagged
+    or human-rejected (``None`` if neither)."""
+    if (parent.get("provenance") or {}).get("expert_flag"):
+        return "expert-flagged"
+    if parent.get("review_status") == "rejected":
+        return "human-rejected"
+    return None
+
+
 def is_parent_candidate(item: Mapping, machine_rejected: Collection[str]) -> bool:
     prov = item.get("provenance") or {}
     return (
@@ -372,17 +382,23 @@ def apply_translations(
     agent_file_sha256: str | None = None,
     dry_run: bool = False,
 ) -> dict[str, list[str]]:
-    """Add the translations to ``directory``; returns ``{"added": ids, "unchanged": ids}``."""
+    """Add the translations to ``directory``; returns ``{"added": ids, "unchanged": ids,
+    "skipped": ids}``. A plan row whose parent is expert-flagged or human-rejected is skipped
+    (not added, an existing translation is left as it is) and listed under ``skipped``."""
     raw, rows = read_split_files(directory)
     by_id = {it["id"]: it for split in SPLITS for it in rows[split]}
     new: dict[str, list[dict]] = {split: [] for split in SPLITS}
     added: list[str] = []
     unchanged: list[str] = []
+    skipped: list[str] = []
     for row in plan:
         parent_id, lang = row["parent_id"], row["target_lang"]
         parent = by_id.get(parent_id)
         if parent is None:
             raise TranslationError(f"{parent_id}: parent is not in {directory}")
+        if parent_block_reason(parent):
+            skipped.append(translation_id(parent_id, lang))
+            continue
         if parent.get("translation_of") or parent["qtype"] != "single" or parent["is_trap"]:
             raise TranslationError(f"{parent_id}: parent must be a single, non-trap original")
         if parent["question"] != row["parent_question"]:
@@ -423,7 +439,7 @@ def apply_translations(
             ordered = originals + sorted(existing_tr + new[split], key=lambda it: it["id"])
             changes[directory / f"{split}.jsonl"] = (raw[split], to_bytes(ordered))
         replace_files(changes)
-    return {"added": sorted(added), "unchanged": sorted(unchanged)}
+    return {"added": sorted(added), "unchanged": sorted(unchanged), "skipped": sorted(skipped)}
 
 
 # ------------------------------------------------------------------ commands
@@ -506,6 +522,8 @@ def run_apply(argv: list[str] | None = None) -> int:
         return 1
     for item_id in result["added"]:
         print(f"{item_id}\tadded")
+    for item_id in result["skipped"]:
+        print(f"{item_id}\tskipped: the parent is expert-flagged or human-rejected")
     verb = "would add" if args.dry_run else "added"
     print(
         f"{verb} {len(result['added'])} translation(s), {len(result['unchanged'])} already "

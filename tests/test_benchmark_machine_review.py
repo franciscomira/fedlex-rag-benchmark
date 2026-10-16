@@ -189,18 +189,60 @@ def test_optional_fields_default(tmp_path):
 
 
 def test_machine_approved_needs_every_required_judge_to_approve():
+    h = "h1"
     v = {
-        "a": {"a": rec("a", "approve"), "b": rec("a", "approve")},
-        "b": {"a": rec("b", "approve"), "b": rec("b", "reject")},
-        "c": {"a": rec("c", "approve")},
+        "a": {"a": rec("a", content_sha256=h), "b": rec("a", content_sha256=h)},
+        "b": {"a": rec("b", content_sha256=h), "b": rec("b", "reject", content_sha256=h)},
+        "c": {"a": rec("c", content_sha256=h)},
         "d": {},
     }
-    assert mr.machine_approved("a", ["a", "b"], v)
-    assert not mr.machine_approved("b", ["a", "b"], v)
-    assert not mr.machine_approved("c", ["a", "b"], v)  # b has no verdict: not approved
-    assert mr.machine_approved("c", ["a"], v)
-    assert not mr.machine_approved("zz", ["a"], v)  # unknown item
-    assert not mr.machine_approved("a", [], v)  # no required judge: nothing is approved
+    assert mr.machine_approved("a", ["a", "b"], v, h)
+    assert not mr.machine_approved("b", ["a", "b"], v, h)
+    assert not mr.machine_approved("c", ["a", "b"], v, h)  # b has no verdict: not approved
+    assert mr.machine_approved("c", ["a"], v, h)
+    assert not mr.machine_approved("zz", ["a"], v, h)  # unknown item
+    assert not mr.machine_approved("a", [], v, h)  # no required judge: nothing is approved
+
+
+def test_machine_approved_is_bound_to_the_item_content():
+    v = {"a": {"j": rec("a", content_sha256="old")}, "b": {"j": rec("b")}}
+    assert mr.machine_approved("a", ["j"], v, "old")
+    assert not mr.machine_approved("a", ["j"], v, "new")  # item text changed since the verdict
+    assert not mr.machine_approved("b", ["j"], v, "old")  # verdict without a hash
+    assert not mr.machine_approved("a", ["j"], v, None)
+
+
+def test_content_sha256_is_the_canonical_hash_of_question_and_facts():
+    import hashlib
+
+    item = {"question": "Wer h\u00e4ftet?", "gold_facts": [{"text": "x", "article_id": "220:1"}]}
+    item["id"] = "z"
+    want = json.dumps(
+        {"question": item["question"], "gold_facts": item["gold_facts"]},
+        sort_keys=True,
+        ensure_ascii=False,
+    )
+    assert mr.content_sha256(item) == hashlib.sha256(want.encode("utf-8")).hexdigest()
+    other = {**item, "id": "y", "review_status": "accepted"}
+    assert mr.content_sha256(other) == mr.content_sha256(item)  # only question and facts count
+    other["question"] += "?"
+    assert mr.content_sha256(other) != mr.content_sha256(item)
+
+
+def test_load_verdicts_keeps_the_content_hash(tmp_path):
+    d = tmp_path / "mr"
+    verdict_file(d, "j-1.jsonl", [rec("v1-0001", content_sha256="abc"), rec("v1-0002")])
+    verdicts, errors = mr.load_verdicts(d)
+    assert errors == []
+    assert verdicts["v1-0001"]["j"]["content_sha256"] == "abc"
+    assert verdicts["v1-0002"]["j"]["content_sha256"] is None
+
+
+def test_a_non_string_content_hash_is_an_error(tmp_path):
+    d = tmp_path / "mr"
+    verdict_file(d, "j-1.jsonl", [rec("v1-0001", content_sha256=5)])
+    verdicts, errors = mr.load_verdicts(d)
+    assert verdicts == {} and any("content_sha256" in e for e in errors)
 
 
 def test_judges_covering_all_ids():
@@ -415,13 +457,18 @@ def test_the_status_command_reports_file_errors(selected, tmp_path, capsys):
 # ------------------------------------------------------------------ the machine-acceptance gate
 
 
+def brec(item, verdict="approve", **kw):
+    """A verdict bound to the item's current text."""
+    return rec(item["id"], verdict, content_sha256=mr.content_sha256(item), **kw)
+
+
 def split_files(items):
     return {s: [i for i in items if i["split"] == s] for s in ("dev", "test")}
 
 
 def test_acceptance_needs_a_judge_that_covers_every_item(tmp_path, items):
     mdir = tmp_path / "mr"
-    verdict_file(mdir, "part-1.jsonl", [rec(i["id"]) for i in items[:-1]])
+    verdict_file(mdir, "part-1.jsonl", [brec(i) for i in items[:-1]])
     acc = mr.machine_acceptance(split_files(items), mdir)
     assert acc.judges == [] and acc.ids == set()
     assert acc.errors and "covers all" in acc.errors[0]
@@ -435,11 +482,13 @@ def test_acceptance_without_any_sidecar_is_an_error(tmp_path, items):
 def test_acceptance_requires_every_covering_judge_and_skips_partial_ones(tmp_path, items):
     mdir = tmp_path / "mr"
     ids = [i["id"] for i in items]
-    verdict_file(mdir, "full-1.jsonl", [rec(i) for i in ids])
+    verdict_file(mdir, "full-1.jsonl", [brec(i) for i in items])
     verdict_file(
-        mdir, "full2-1.jsonl", [rec(i, "reject" if i == ids[1] else "approve") for i in ids]
+        mdir,
+        "full2-1.jsonl",
+        [brec(i, "reject" if i["id"] == ids[1] else "approve") for i in items],
     )
-    verdict_file(mdir, "part-1.jsonl", [rec(ids[2], "reject")])  # does not cover all: ignored
+    verdict_file(mdir, "part-1.jsonl", [brec(items[2], "reject")])  # does not cover all: ignored
     acc = mr.machine_acceptance(split_files(items), mdir)
     assert acc.errors == [] and acc.judges == ["full", "full2"]
     assert acc.ids == set(ids) - {ids[1]}
@@ -448,7 +497,7 @@ def test_acceptance_requires_every_covering_judge_and_skips_partial_ones(tmp_pat
 def test_acceptance_excludes_rejected_and_expert_flagged_items(tmp_path, items):
     mdir = tmp_path / "mr"
     ids = [i["id"] for i in items]
-    verdict_file(mdir, "j-1.jsonl", [rec(i) for i in ids])
+    verdict_file(mdir, "j-1.jsonl", [brec(i) for i in items])
     items[0]["review_status"] = "rejected"
     items[1]["provenance"]["expert_flag"] = True
     items[2].update(review_status="accepted", reviewed_by="F", reviewed_at="t")
@@ -459,10 +508,201 @@ def test_acceptance_excludes_rejected_and_expert_flagged_items(tmp_path, items):
 
 def test_acceptance_propagates_file_errors(tmp_path, items):
     mdir = tmp_path / "mr"
-    ids = [i["id"] for i in items]
-    verdict_file(mdir, "j-1.jsonl", [rec(i) for i in ids] + [rec("v1-9999")])
+    verdict_file(mdir, "j-1.jsonl", [brec(i) for i in items] + [rec("v1-9999")])
     acc = mr.machine_acceptance(split_files(items), mdir)
     assert any("v1-9999" in e for e in acc.errors)
+
+
+def test_acceptance_refuses_verdicts_not_bound_to_the_current_text(tmp_path, items):
+    mdir = tmp_path / "mr"
+    stale, unhashed = items[3], items[4]
+    recs = [brec(i) for i in items]
+    recs[3]["content_sha256"] = "0" * 64
+    del recs[4]["content_sha256"]
+    verdict_file(mdir, "j-1.jsonl", recs)
+    acc = mr.machine_acceptance(split_files(items), mdir)
+    assert stale["id"] not in acc.ids and unhashed["id"] not in acc.ids
+    assert acc.unbound == sorted([stale["id"], unhashed["id"]])
+    assert any(
+        stale["id"] in e and unhashed["id"] in e and "content_sha256" in e for e in acc.errors
+    )
+
+
+def test_a_changed_item_text_unbinds_its_verdict(tmp_path, items):
+    mdir = tmp_path / "mr"
+    verdict_file(mdir, "j-1.jsonl", [brec(i) for i in items])
+    items[0]["question"] = "A revised question?"
+    acc = mr.machine_acceptance(split_files(items), mdir)
+    assert acc.unbound == [items[0]["id"]] and items[0]["id"] not in acc.ids
+
+
+def test_human_reviewed_and_rejected_items_need_no_binding(tmp_path, items):
+    mdir = tmp_path / "mr"
+    verdict_file(mdir, "j-1.jsonl", [rec(i["id"]) for i in items])  # no hashes at all
+    items[0].update(review_status="accepted", reviewed_by="F", reviewed_at="t")
+    items[1]["review_status"] = "rejected"
+    acc = mr.machine_acceptance(split_files(items), mdir)
+    assert items[0]["id"] not in acc.unbound and items[1]["id"] not in acc.unbound
+    assert len(acc.unbound) == len(items) - 2
+
+
+# ------------------------------------------------------------------ machine-review-bind
+
+
+def facts(item):
+    return [{"text": f["text"], "article_id": f["article_id"]} for f in item["gold_facts"]]
+
+
+def judge_in(folder, name, items, **changes):
+    """Judge input lines as the judges saw them (``changes``: {id: {field: value}})."""
+    folder.mkdir(parents=True, exist_ok=True)
+    lines = []
+    for i in items:
+        row = {
+            "id": i["id"],
+            "question": i["question"],
+            "gold_facts": facts(i),
+            "articles": {},
+            "qtype": i["qtype"],
+            "query_lang": i["query_lang"],
+        }
+        row.update(changes.get(i["id"], {}))
+        lines.append(json.dumps(row, ensure_ascii=False))
+    (folder / name).write_bytes(("\n".join(lines) + "\n").encode("utf-8"))
+
+
+@pytest.fixture
+def bindable(tmp_path):
+    items = make_items()[:6]
+    for n, it in enumerate(items):
+        it["question"] = f"Frage {n} \u00e4?"
+        it["gold_facts"] = [{"text": f"fact {n}", "article_id": f"220:{n + 1}"}]
+    folder, mdir, aids = tmp_path / "selected", tmp_path / "mr", tmp_path / "aids"
+    put(folder, items)
+    verdict_file(mdir, "claude-judge-1.jsonl", [rec(i["id"]) for i in items[:3]])
+    verdict_file(mdir, "claude-judge-2.jsonl", [rec(i["id"]) for i in items[3:]])
+    return items, folder, mdir, aids
+
+
+def bind(folder, mdir, aids, *extra):
+    argv = ["--dir", str(folder), "--machine-dir", str(mdir), "--aids-dir", str(aids), *extra]
+    return cli.main(["machine-review-bind", *argv])
+
+
+def hashes(mdir):
+    out = {}
+    for path in sorted(mdir.glob("claude-judge-*.jsonl")):
+        for r in read_jsonl(path):
+            out[r["id"]] = r.get("content_sha256")
+    return out
+
+
+def sidecar_bytes(mdir):
+    return {p.name: p.read_bytes() for p in sorted(mdir.glob("*.jsonl"))}
+
+
+def test_bind_fills_the_hash_of_what_the_judge_saw(bindable, capsys):
+    items, folder, mdir, aids = bindable
+    judge_in(aids, "judge-in-1.jsonl", items)
+    assert bind(folder, mdir, aids) == 0
+    assert hashes(mdir) == {i["id"]: mr.content_sha256(i) for i in items}
+    assert "bound 6" in capsys.readouterr().out
+
+
+def test_bind_is_idempotent_and_leaves_other_fields_alone(bindable):
+    items, folder, mdir, aids = bindable
+    judge_in(aids, "judge-in-1.jsonl", items)
+    before = {r["id"]: r for p in sorted(mdir.glob("*-?.jsonl")) for r in read_jsonl(p)}
+    bind(folder, mdir, aids)
+    first = sidecar_bytes(mdir)
+    bind(folder, mdir, aids)
+    assert sidecar_bytes(mdir) == first
+    after = {r["id"]: r for p in sorted(mdir.glob("*-?.jsonl")) for r in read_jsonl(p)}
+    for item_id, r in after.items():
+        assert {k: v for k, v in r.items() if k != "content_sha256"} == before[item_id]
+
+
+def test_bind_reports_and_skips_an_item_whose_text_changed_after_judging(bindable, capsys):
+    items, folder, mdir, aids = bindable
+    judge_in(aids, "judge-in-1.jsonl", items, **{items[2]["id"]: {"question": "Older text?"}})
+    assert bind(folder, mdir, aids) == 0
+    h = hashes(mdir)
+    assert h[items[2]["id"]] is None and h[items[0]["id"]] == mr.content_sha256(items[0])
+    out = capsys.readouterr().out
+    assert items[2]["id"] in out and "differs" in out and "unbound 1" in out
+
+
+def test_bind_a_changed_gold_fact_is_also_a_difference(bindable):
+    items, folder, mdir, aids = bindable
+    bad = [{"text": "other fact", "article_id": "220:1"}]
+    judge_in(aids, "judge-in-1.jsonl", items, **{items[0]["id"]: {"gold_facts": bad}})
+    bind(folder, mdir, aids)
+    assert hashes(mdir)[items[0]["id"]] is None
+
+
+def test_bind_later_judge_input_files_override_earlier_ones(bindable):
+    items, folder, mdir, aids = bindable
+    old = {items[0]["id"]: {"question": "first version?"}}
+    judge_in(aids, "judge-in-1.jsonl", items, **old)
+    judge_in(aids, "judge-in-r2-1.jsonl", items[:1], **old)
+    judge_in(aids, "judge-in-r3-1.jsonl", items[:1])  # r3 sorts after r2 and 1
+    judge_in(aids, "judge-in-tr-1.jsonl", items[1:2], **{items[1]["id"]: {"question": "x?"}})
+    bind(folder, mdir, aids)
+    h = hashes(mdir)
+    assert h[items[0]["id"]] == mr.content_sha256(items[0])
+    assert h[items[1]["id"]] is None  # the tr file (latest) shows other text than the item has
+
+
+def test_bind_input_file_order_is_numeric_then_r2_r3_bf_tr(tmp_path):
+    names = [
+        "judge-in-tr-2",
+        "judge-in-10",
+        "judge-in-bf-1",
+        "judge-in-2",
+        "judge-in-r3-1",
+        "judge-in-r2-1",
+        "judge-in-tr-1",
+        "judge-in-1",
+    ]
+    for n in names:
+        (tmp_path / f"{n}.jsonl").write_text("", encoding="utf-8")
+    (tmp_path / "flags.jsonl").write_text("", encoding="utf-8")
+    got = [p.stem for p in mr.judge_input_files(tmp_path)]
+    assert got == [
+        "judge-in-1",
+        "judge-in-2",
+        "judge-in-10",
+        "judge-in-r2-1",
+        "judge-in-r3-1",
+        "judge-in-bf-1",
+        "judge-in-tr-1",
+        "judge-in-tr-2",
+    ]
+
+
+def test_bind_reports_items_the_judges_never_saw(bindable, capsys):
+    items, folder, mdir, aids = bindable
+    judge_in(aids, "judge-in-1.jsonl", items[:5])
+    assert bind(folder, mdir, aids) == 0
+    assert hashes(mdir)[items[5]["id"]] is None
+    out = capsys.readouterr().out
+    assert items[5]["id"] in out and "no judge input" in out
+
+
+def test_bind_dry_run_writes_nothing(bindable):
+    items, folder, mdir, aids = bindable
+    judge_in(aids, "judge-in-1.jsonl", items)
+    before = sidecar_bytes(mdir)
+    assert bind(folder, mdir, aids, "--dry-run") == 0
+    assert sidecar_bytes(mdir) == before
+
+
+def test_bound_sidecars_make_the_items_machine_approved(bindable):
+    items, folder, mdir, aids = bindable
+    judge_in(aids, "judge-in-1.jsonl", items)
+    bind(folder, mdir, aids)
+    acc = mr.machine_acceptance(split_files(items), mdir)
+    assert acc.errors == [] and acc.unbound == [] and acc.ids == {i["id"] for i in items}
 
 
 def test_human_verdict_mapping():
@@ -470,3 +710,17 @@ def test_human_verdict_mapping():
     assert mr.human_verdict({"review_status": "edited"}) == "approve"
     assert mr.human_verdict({"review_status": "rejected"}) == "reject"
     assert mr.human_verdict({"review_status": "unreviewed"}) is None
+
+
+def test_bind_a_trap_without_gold_facts_in_the_judge_input_binds_as_empty(bindable):
+    items, folder, mdir, aids = bindable
+    items[0].update(is_trap=True, qtype="trap", gold_facts=[])
+    put(folder, items)
+    judge_in(aids, "judge-in-1.jsonl", items)
+    path = aids / "judge-in-1.jsonl"
+    rows = [json.loads(x) for x in path.read_text(encoding="utf-8").splitlines()]
+    del rows[0]["gold_facts"]  # traps are shown with a trap reason instead
+    rows[0]["trap_reason"] = "out of area"
+    path.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    bind(folder, mdir, aids)
+    assert hashes(mdir)[items[0]["id"]] == mr.content_sha256(items[0])

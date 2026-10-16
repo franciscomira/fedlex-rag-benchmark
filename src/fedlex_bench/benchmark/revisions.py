@@ -6,7 +6,8 @@ gets the candidate's question, gold facts, difficulty, ranks, trap reason and ca
 candidate must agree with the item on gold article ids, query language, question type, split and
 source act, otherwise nothing is written. The previous question and facts are kept once under
 ``provenance.pre_revision``; ``provenance.revision`` is set; the item goes back to ``unreviewed``
-(reviewer fields cleared) because a human must re-review revised text. ``expert_flag`` is kept.
+(reviewer fields and ``provenance.review_basis`` cleared) because a human must re-review revised
+text. ``expert_flag`` is kept.
 
 A slot whose item already carries the candidate's hash and a revision mark is skipped, so running
 twice never wipes a human review of the revised text. Files are replaced atomically (sorted keys,
@@ -53,6 +54,7 @@ def _revise(item: dict, cand: dict) -> None:
     ]
     prov["candidate_sha256"] = cand["candidate_sha256"]
     prov["revision"] = REVISION
+    prov.pop("review_basis", None)  # the basis described the review of the old text
     item["review_status"] = "unreviewed"
     item["reviewed_by"] = item["reviewed_at"] = item["review_note"] = None
 
