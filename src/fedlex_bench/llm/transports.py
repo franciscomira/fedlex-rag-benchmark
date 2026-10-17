@@ -101,6 +101,8 @@ class OpenAITransport:
             kwargs["reasoning"] = {"effort": spec.effort}
         if request.json_output:
             kwargs["text"] = {"format": {"type": "json_object"}}
+            if "json" not in request.user.lower():  # API requires the word in the input itself
+                kwargs["input"] = request.user + "\n\nRespond with JSON."
         if spec.send_temperature:
             kwargs["temperature"] = request.temperature
         resp = self._sdk.responses.create(**kwargs)

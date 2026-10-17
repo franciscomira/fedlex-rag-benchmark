@@ -92,7 +92,8 @@ def test_openai_maps_request_and_usage():
     assert raw.text == "hello"
     assert (raw.input_tokens, raw.cached_input_tokens, raw.output_tokens) == (150, 50, 70)
     kw = rec.kwargs
-    assert kw["model"] == "gpt-x" and kw["instructions"] == "SYS" and kw["input"] == "USER"
+    assert kw["model"] == "gpt-x" and kw["instructions"] == "SYS"
+    assert kw["input"].startswith("USER") and "json" in kw["input"].lower()
     assert kw["max_output_tokens"] == 300
     assert kw["reasoning"] == {"effort": "low"}
     assert kw["text"] == {"format": {"type": "json_object"}}
@@ -144,3 +145,26 @@ def test_missing_key_raises_clear_error(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     with pytest.raises(ProviderError, match="ANTHROPIC_API_KEY"):
         AnthropicTransport(env_var="ANTHROPIC_API_KEY", load_env=False)
+
+
+def test_openai_json_output_puts_the_word_json_in_the_input():
+    from types import SimpleNamespace as NS
+
+    from fedlex_bench.llm.config import resolve_model
+    from fedlex_bench.llm.transports import OpenAITransport
+    from fedlex_bench.types import LLMRequest
+
+    seen = {}
+
+    class Sdk:
+        class responses:  # noqa: N801
+            @staticmethod
+            def create(**kw):
+                seen.update(kw)
+                u = NS(input_tokens=1, output_tokens=1, input_tokens_details=None)
+                return NS(output_text="{}", usage=u)
+
+    OpenAITransport(sdk=Sdk).call(
+        resolve_model("gpt-6-luna"), LLMRequest(system="s", user="question", json_output=True)
+    )
+    assert "json" in seen["input"].lower()
