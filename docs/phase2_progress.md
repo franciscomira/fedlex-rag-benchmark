@@ -25,3 +25,9 @@ Runs: `eval/results/dev_ret_<method>_<config>_article/`. Command: `uv run python
 | single_lang_it | 0.17 | 0.27 | 0.31 |
 
 Read: cross-lingual retrieval is weak for every method (as expected for BM25; multilingual-e5-small is also modest). Hybrid on the all-language index is best of the cross-lingual configs but the CIs overlap widely (±15 points), so hybrid vs embedding-only is not a claim. BM25 alone collapses on single-language indexes (little shared vocabulary). Nothing here looks too good. Next: LLM reranker on top (needs API keys).
+
+### 2026-10-17: Step 3, cross-family check of benchmark v1 (live, Gemini)
+
+Judge: `gemini-3.6-flash` (Google; Phase 1 judge was Claude Opus), same rubric as the `question-judge` agent, run by `python -m fedlex_bench.benchmark.cross_family`. The Claude judge could search the corpus; here code supplies the gold text in DE/FR/IT plus the 6 best retrieved competing articles (hybrid, all-language) per item. Output: `benchmark/machine_review/gemini-judge-1.jsonl` (same sidecar format, bound to item content hashes). Cost about 1 USD of the 25 USD cap.
+
+Result: 242 of 242 items approved, 0 disagreements with the Claude judge (0%, under the 10% stop threshold). **This is weak evidence.** Every verdict has confidence "high", and a negative control shows the judge is lenient: on 20 dev items whose gold facts were swapped for another item's facts it rejected 14 and still approved 5 (74% detection of blatant errors). So the check rules out gross family-specific blind spots but does not show the items are right. The benchmark v1 is unchanged; no v2 is needed on this evidence. A second family (GPT) or a per-fact verification prompt would be stronger; not run (cost about 3 to 4 USD).
