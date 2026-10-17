@@ -1,0 +1,22 @@
+{
+  "config_hash": "d633b080a7",
+  "git_sha": "dfc361b575031b896c0dacc934dd4bd8596b9d57",
+  "judge_model": "none",
+  "n_items": 63,
+  "prompt_hashes": {
+    "facts": "6e9e3aef21b9822e",
+    "faithfulness": "3d9d759fbd9f518d",
+    "trap": "819a324b09beae39"
+  },
+  "run_id": "dev_ret_bm25_single_lang_fr_article",
+  "split": "dev",
+  "system": {
+    "answer_articles": 5,
+    "answerer": null,
+    "kind": "pipeline",
+    "rerank_k": 30,
+    "reranker": null,
+    "retrieve_k": 60,
+    "retriever": "bm25/single_lang_fr/article"
+  }
+}
