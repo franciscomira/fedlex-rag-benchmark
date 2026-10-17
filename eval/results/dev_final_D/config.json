@@ -1,0 +1,45 @@
+{
+  "config_hash": "89a1a1a0ad",
+  "git_sha": "33205aa2cd2c5d55b7021589086b7014f4db3596",
+  "judge_model": "gpt-6.1-sol",
+  "judge_prompts": {
+    "facts": "6e9e3aef21b9822e",
+    "faithfulness": "3d9d759fbd9f518d",
+    "trap": "819a324b09beae39"
+  },
+  "n_items": 63,
+  "prompt_hashes": {
+    "facts": "6e9e3aef21b9822e",
+    "faithfulness": "3d9d759fbd9f518d",
+    "trap": "819a324b09beae39"
+  },
+  "provenance": {
+    "agent_prompts": "5dd5bd1f085f",
+    "answer_prompt": "640328361630b6dec18d27cab25d6f5851f832178bcf8bb63736e2dc36712f05",
+    "benchmark_sha256sums": "0e6e115830885495",
+    "bootstrap_seed": 20261017,
+    "corpus_parquet": "e6a8ddac5bcabe3b",
+    "models_toml": "4b85ccd3a13054c0",
+    "price_table": "558e3b1f576823e9",
+    "rerank_prompt": "06df4f393f9771888b691c2cd663e20d8b3c8a59b184848102ed2f8581373e08"
+  },
+  "run_id": "dev_final_D",
+  "split": "dev",
+  "system": {
+    "adk_version": "2.12.0",
+    "answer_k": 12,
+    "answerer": "answer/claude-haiku-5-5",
+    "k": 8,
+    "kind": "adk_multi_agent",
+    "llm_model_id": "claude-haiku-5-5",
+    "max_rounds": 3,
+    "max_tool_calls": 24,
+    "name": "adk_agent/claude-haiku-5-5/answer/claude-haiku-5-5",
+    "prompt_hash": "5dd5bd1f085f",
+    "retrievers": {
+      "de": "hybrid/single_lang_de/article",
+      "fr": "hybrid/single_lang_fr/article",
+      "it": "hybrid/single_lang_it/article"
+    }
+  }
+}

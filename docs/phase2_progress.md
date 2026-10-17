@@ -164,3 +164,7 @@ Four configurations, each run once on `benchmark/v1/test.jsonl` (179 items: 125 
 
 Why these four: A is the no-model floor; B is the standard reranker-plus-answerer baseline; C is the control that isolates query translation; D is the agent. Not frozen, with reasons: GPT and Gemini answerers (no difference on dev once judged by one judge), Sonnet reranker (identical recall to Haiku at 20x the cost), paragraph and window chunks (no gain), other index configurations (cross-lingual all_lang is the headline setting; the matrix stays a dev result).
 Hypotheses stated now: D > C > B on recall@10 and fact recall; the C vs B gap is claimable on test; D vs C answer quality is unlikely to be resolvable with 110 answerable test items.
+
+### 2026-10-18: freeze recorded in `eval/frozen_configs.json` (before any test number)
+
+Hashes (system config, judge, prompts, benchmark checksum, corpus, prices, model registry): A 78df4b6f59, B be2a67022b, C 89c5213cec, D 89a1a1a0ad. Dev results with the fixed harness (`dev_final_A` to `dev_final_D`, judge gpt-6.1-sol, 0 judge failures, 0 parse failures): recall@10 A 0.46, B 0.66, C 0.79, D 0.97; fact recall B 0.56, C 0.66, D 0.72; over-refusal B 0.14, C 0.09, D 0.07. Spend so far 6.73 USD of 25; the four test runs are estimated at about 5 USD.

@@ -1,0 +1,63 @@
+{
+ "A": {
+  "hash": "78df4b6f59",
+  "judge": null,
+  "system": {
+   "answer_articles": 5,
+   "answerer": null,
+   "kind": "pipeline",
+   "rerank_k": 30,
+   "reranker": null,
+   "retrieve_k": 60,
+   "retriever": "hybrid/all_lang/article"
+  }
+ },
+ "B": {
+  "hash": "be2a67022b",
+  "judge": "gpt-6.1-sol",
+  "system": {
+   "answer_articles": 5,
+   "answerer": "answer/claude-haiku-5-5",
+   "kind": "pipeline",
+   "rerank_k": 60,
+   "reranker": "llm_rerank/claude-haiku-5-5",
+   "retrieve_k": 150,
+   "retriever": "hybrid/all_lang/article"
+  }
+ },
+ "C": {
+  "hash": "89c5213cec",
+  "judge": "gpt-6.1-sol",
+  "system": {
+   "answer_articles": 5,
+   "answerer": "answer/claude-haiku-5-5",
+   "kind": "translate_retrieve",
+   "rerank_k": 60,
+   "reranker": "llm_rerank/claude-haiku-5-5",
+   "retrieve_k": 60,
+   "retriever": "per_lang/hybrid/single_lang_de/article+hybrid/single_lang_fr/article+hybrid/single_lang_it/article",
+   "translator": "claude-haiku-5-5"
+  }
+ },
+ "D": {
+  "hash": "89a1a1a0ad",
+  "judge": "gpt-6.1-sol",
+  "system": {
+   "adk_version": "2.12.0",
+   "answer_k": 12,
+   "answerer": "answer/claude-haiku-5-5",
+   "k": 8,
+   "kind": "adk_multi_agent",
+   "llm_model_id": "claude-haiku-5-5",
+   "max_rounds": 3,
+   "max_tool_calls": 24,
+   "name": "adk_agent/claude-haiku-5-5/answer/claude-haiku-5-5",
+   "prompt_hash": "5dd5bd1f085f",
+   "retrievers": {
+    "de": "hybrid/single_lang_de/article",
+    "fr": "hybrid/single_lang_fr/article",
+    "it": "hybrid/single_lang_it/article"
+   }
+  }
+ }
+}
