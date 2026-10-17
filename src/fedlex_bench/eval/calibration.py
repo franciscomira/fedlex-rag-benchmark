@@ -148,7 +148,8 @@ def cmd_sample(args: argparse.Namespace) -> None:
 
 
 def cmd_agree(args: argparse.Namespace) -> None:
-    from fedlex_bench.eval.__main__ import BENCH, RESULTS, _judge_ref
+    """Agreement of each candidate judge model with the hand labels (answers come from the cache)."""
+    from fedlex_bench.eval.__main__ import BENCH, DEFAULT_JUDGE, GPT_ANSWERER_JUDGE, RESULTS
     from fedlex_bench.eval.judge import Judge
     from fedlex_bench.eval.runner import load_items
     from fedlex_bench.llm import build_client
@@ -156,29 +157,35 @@ def cmd_agree(args: argparse.Namespace) -> None:
     items = {i["id"]: i for i in load_items(BENCH / "dev.jsonl")}
     labels = json.loads((CALIB_DIR / "labels.json").read_text(encoding="utf-8"))
     meta = json.loads((CALIB_DIR / "sample.json").read_text(encoding="utf-8"))
-    human: dict[str, Any] = {}
-    judge_out: dict[str, Any] = {}
-    for m in meta:
-        lab = labels[m["id"]]
-        row = next(json.loads(x) for x in (RESULTS / m["run"] / "per_item.jsonl")
-                   .read_text(encoding="utf-8").splitlines() if json.loads(x)["id"] == m["id"])
-        answerer = json.loads((RESULTS / m["run"] / "config.json").read_text())["system"]["answerer"]
-        judge = Judge(build_client(_judge_ref(answerer.removeprefix("answer/"), None)))
-        it = items[m["id"]]
-        if it["is_trap"]:
-            if lab["asserts_answer"] is None:
-                continue
-            human[m["id"]] = lab["asserts_answer"]
-            judge_out[m["id"]] = judge.trap_leak(it["question"], row["answer"], it["trap_reason"]).leaked
-        else:
-            if any(v is None for v in lab["facts"]):
-                continue
-            human[m["id"]] = lab["facts"]
-            judge_out[m["id"]] = judge.fact_recall(it["question"], row["answer"], it["gold_facts"]).verdicts
-    report = agreement(judge_out, human)
-    report["n_items_labelled"] = len(human)
-    (CALIB_DIR / "agreement.json").write_text(json.dumps(report, indent=1), encoding="utf-8")
-    print(json.dumps(report, indent=1))
+    reports: dict[str, Any] = {}
+    for model in (DEFAULT_JUDGE, GPT_ANSWERER_JUDGE):
+        judge = Judge(build_client(model))
+        human: dict[str, Any] = {}
+        judge_out: dict[str, Any] = {}
+        for m in meta:
+            lab = labels[m["id"]]
+            lines = (RESULTS / m["run"] / "per_item.jsonl").read_text(encoding="utf-8").splitlines()
+            row = next(r for r in map(json.loads, lines) if r["id"] == m["id"])
+            it = items[m["id"]]
+            if it["is_trap"]:
+                if lab["asserts_answer"] is None:
+                    continue
+                human[m["id"]] = lab["asserts_answer"]
+                leak = judge.trap_leak(it["question"], row["answer"], it["trap_reason"])
+                judge_out[m["id"]] = leak.leaked
+            else:
+                if any(v is None for v in lab["facts"]):
+                    continue
+                human[m["id"]] = lab["facts"]
+                fr = judge.fact_recall(it["question"], row["answer"], it["gold_facts"])
+                judge_out[m["id"]] = fr.verdicts
+        usable = [i for i in human if judge_out[i] is not None and judge_out[i] != []]
+        report = agreement({i: judge_out[i] for i in usable}, {i: human[i] for i in usable})
+        report["n_items_labelled"] = len(human)
+        report["n_items_scored"] = len(usable)
+        reports[model] = report
+    (CALIB_DIR / "agreement.json").write_text(json.dumps(reports, indent=1), encoding="utf-8")
+    print(json.dumps(reports, indent=1))
 
 
 def main(argv: list[str] | None = None) -> None:

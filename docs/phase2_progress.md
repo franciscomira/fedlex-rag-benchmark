@@ -103,3 +103,11 @@ Sanity on "too good to be true": agent recall@10 is 0.93 overall, 1.00 for DE an
 | fixed window (200 words, 50 overlap) | 0.45 [0.29, 0.60] | 0.66 [0.49, 0.80] | 0.0015 |
 
 Paragraph chunks are worse by about 9 to 12 points (CIs overlap, so not claimed) and cheaper to rerank; window equals article. Answer-level numbers for window vs article follow when the run finishes.
+
+### 2026-10-17: judge self-preference check and a correction to the single-shot table
+
+`python -m fedlex_bench.eval.selfpref` scored the same answered dev answers with both candidate judges (`eval/results/selfpref.json`). **gemini-3.5-flash-lite scores 0.13 to 0.17 higher than gpt-6-luna on every answerer's answers** (Claude -0.13 [-0.23, -0.03], GPT -0.17 [-0.24, -0.09], Gemini -0.15 [-0.22, -0.07], gap = luna minus Gemini judge). The gap is the same size for Gemini's own answers as for the others, so this is a leniency difference between the judges, not a visible self-preference.
+
+**Consequence:** the earlier single-shot table judged the GPT answers with the Gemini judge (the spec's family rule) and the others with luna, so its "GPT best" (0.64 vs 0.55 and 0.50) was a judge artifact. With one judge (gpt-6-luna) for all three (`dev_ans_gpt-6-luna_judgeluna`): fact recall Claude 0.55 [0.43, 0.69], GPT 0.51 [0.38, 0.64], Gemini 0.50 [0.39, 0.63], faithfulness 0.77 / 0.83 / 0.79. The three answerers are indistinguishable on dev. **Rule from now on: cross-model comparisons use one judge for all rows (gpt-6-luna) and the other judge is a sensitivity check;** the spec's per-family judge rule is amended below. Which judge is closer to a human is for the calibration to decide.
+
+Window vs article chunks, with answers (Haiku, same judge): fact recall 0.51 [0.39, 0.63] vs 0.55 [0.43, 0.69], faithfulness 0.75 vs 0.77, cost equal. No difference; article chunks stay the default (simpler, same quality).
