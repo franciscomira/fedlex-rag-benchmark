@@ -45,4 +45,9 @@ def citation_precision_recall(
 
 def trap_code_checks(answer: AnswerResult) -> bool:
     """Criteria 1 and 2 of the trap rule: refused and no citations. Criterion 3 is the judge's."""
-    return (not answer.parse_failed) and answer.status == "refused" and not answer.citations
+    return (
+        (not answer.parse_failed)
+        and answer.status == "refused"
+        and not answer.citations
+        and not answer.invalid_citations  # a made-up id is still a citation attempt
+    )

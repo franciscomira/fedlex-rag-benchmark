@@ -10,6 +10,7 @@ COLUMNS = (
     ("recall@1", "R@1"),
     ("recall@5", "R@5"),
     ("recall@10", "R@10"),
+    ("all_gold@10", "All gold@10"),
     ("mrr", "MRR"),
     ("fact_recall", "Fact recall"),
     ("faithfulness", "Faithful"),
@@ -32,7 +33,7 @@ def _label(config: dict[str, Any]) -> str:
 
 
 def render_table(run_dirs: list[Path]) -> str:
-    header = ["System", "n", *[c[1] for c in COLUMNS], "Cost/q USD", "p50 s", "p95 s", "Traps"]
+    header = ["System", "n", *[c[1] for c in COLUMNS], "Over-refusal", "Parse fail", "Judge fail", "Cost/q USD", "p50 s", "p95 s", "Traps"]
     lines = ["| " + " | ".join(header) + " |", "|" + "---|" * len(header)]
     for d in run_dirs:
         metrics = json.loads((d / "metrics.json").read_text(encoding="utf-8"))
@@ -41,8 +42,11 @@ def render_table(run_dirs: list[Path]) -> str:
         traps = metrics["traps"]
         row = [
             _label(config),
-            str(metrics["n_items"]),
+            str(metrics.get("n_answerable", metrics["n_items"])),
             *[_cell(o.get(key)) for key, _ in COLUMNS],
+            _cell(o.get("over_refusal")),
+            _cell(o.get("parse_failure_rate")),
+            str(sum(metrics["judge_failures"].values()) if isinstance(metrics.get("judge_failures"), dict) else metrics.get("judge_failures", 0)),
             _cell(o.get("cost_usd"), 4),
             f"{o.get('latency_p50', float('nan')):.2f}",
             f"{o.get('latency_p95', float('nan')):.2f}",

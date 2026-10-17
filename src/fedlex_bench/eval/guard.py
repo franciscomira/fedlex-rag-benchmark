@@ -35,7 +35,9 @@ def article_text_lookup(parquet: Path) -> Callable[[Iterable[str]], Mapping[str,
 def require_clean_tree(repo: Path) -> str:
     """Return HEAD sha; refuse if the working tree has uncommitted changes."""
     status = subprocess.run(
-        ["git", "-C", str(repo), "status", "--porcelain"], capture_output=True, text=True
+        ["git", "-C", str(repo), "status", "--porcelain", "--", ".", ":!eval/results", ":!eval/test_runs.log"],
+        capture_output=True,
+        text=True,
     )
     if status.stdout.strip():
         raise TestRunRefused("test runs need a clean git tree; commit first")
@@ -45,12 +47,31 @@ def require_clean_tree(repo: Path) -> str:
     return head.stdout.strip()
 
 
-def log_test_run(log: Path, *, run_id: str, config_hash: str, date: str) -> None:
-    """Append a test run; refuse a second run of the same frozen configuration."""
+def _entries(log: Path) -> list[dict]:
+    return [json.loads(x) for x in log.read_text("utf-8").splitlines()] if log.exists() else []
+
+
+def _append(log: Path, entry: dict) -> None:
     log.parent.mkdir(parents=True, exist_ok=True)
-    existing = [json.loads(x) for x in log.read_text("utf-8").splitlines()] if log.exists() else []
-    if any(e["config_hash"] == config_hash for e in existing):
-        raise TestRunRefused(f"configuration {config_hash} already ran on test")
-    entry = {"date": date, "run_id": run_id, "config_hash": config_hash}
     with log.open("a", encoding="utf-8", newline="\n") as fh:
         fh.write(json.dumps(entry, sort_keys=True) + "\n")
+
+
+def log_test_start(log: Path, *, run_id: str, config_hash: str, date: str) -> None:
+    """Record that a test run started; refuse if this configuration already completed one."""
+    if any(e["config_hash"] == config_hash and e["status"] == "completed" for e in _entries(log)):
+        raise TestRunRefused(f"configuration {config_hash} already ran on test")
+    _append(log, {"date": date, "run_id": run_id, "config_hash": config_hash, "status": "started"})
+
+
+def log_test_done(log: Path, *, run_id: str, config_hash: str, date: str) -> None:
+    _append(log, {"date": date, "run_id": run_id, "config_hash": config_hash, "status": "completed"})
+
+
+def require_frozen(frozen_file: Path, config_hash: str) -> str:
+    """The name of the frozen configuration with this hash; refuse any other test run."""
+    frozen = json.loads(frozen_file.read_text("utf-8")) if frozen_file.exists() else {}
+    for name, entry in sorted(frozen.items()):
+        if entry["hash"] == config_hash:
+            return name
+    raise TestRunRefused(f"configuration {config_hash} is not in {frozen_file.name}; test runs are frozen")

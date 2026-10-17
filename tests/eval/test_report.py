@@ -8,9 +8,10 @@ def _run(tmp_path, name, recall, lo, hi):
     d.mkdir()
     stat = {"n": 40, "mean": recall, "lo": lo, "hi": hi}
     block = {"recall@1": stat, "recall@5": stat, "recall@10": stat, "mrr": stat,
-             "fact_recall": {"n": 0}, "cost_usd": {"n": 40, "mean": 0.01, "lo": 0, "hi": 0.02},
+             "fact_recall": {"n": 0}, "all_gold@10": stat, "cost_usd": {"n": 40, "mean": 0.01, "lo": 0, "hi": 0.02},
              "latency_p50": 0.5, "latency_p95": 1.5}
-    metrics = {"n_items": 63, "overall": block, "traps": {"correct": 0, "n": 0}}
+    metrics = {"n_items": 63, "n_answerable": 58, "overall": block, "traps": {"correct": 0, "n": 0},
+               "judge_failures": {"fact": 0, "faith": 0, "trap": 0}}
     (d / "metrics.json").write_text(json.dumps(metrics))
     (d / "config.json").write_text(json.dumps({"system": {"retriever": f"sys-{name}"}}))
     return d

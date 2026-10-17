@@ -75,7 +75,10 @@ class PipelineSystem:
         if self.reranker and candidates:
             head, tail = candidates[: self.rerank_k], candidates[self.rerank_k :]
             rr = self.reranker.rerank(query, query_lang, head, len(head))
-            candidates = list(rr.candidates) + tail
+            reranked = list(rr.candidates)
+            kept = {(c.article_id, c.lang, c.chunk_id) for c in reranked}  # replace() copies
+            dropped = [c for c in head if (c.article_id, c.lang, c.chunk_id) not in kept]  # never lose a candidate
+            candidates = reranked + dropped + tail
             usage = usage + rr.usage
         answer = None
         if self.answerer:

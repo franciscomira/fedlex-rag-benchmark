@@ -88,3 +88,81 @@ def test_run_eval_writes_layout(tmp_path):
     cfg = json.loads((d / "config.json").read_text())
     assert cfg["git_sha"] == "abc" and cfg["system"] == {"kind": "fake"} and "prompt_hashes" in cfg
     assert len((d / "per_item.jsonl").read_text().splitlines()) == 2
+
+
+def bad_parse():
+    ans = AnswerResult("refused", "", [], [], [], True, Usage(calls=1))
+    return SystemOutput(["220:1"], ans, Usage(calls=1))
+
+
+def test_mrr_uses_only_the_top_20():
+    ranked = [f"x:{i}" for i in range(20)] + ["220:1"]  # gold at rank 21
+    r = score_item(ITEM, out(ranked), Judge(FakeJudgeClient()), texts)
+    assert r["mrr"] == 0.0 and r["recall@10"] == 0.0
+
+
+def test_all_gold_at_10_requires_every_gold_article():
+    item = {**ITEM, "gold_article_ids": ["220:1", "220:2"],
+            "gold_facts": [{"text": "f", "article_id": "220:1"}]}
+    one = score_item(item, out(["220:1"]), Judge(FakeJudgeClient()), texts)
+    both = score_item(item, out(["220:1", "220:2"]), Judge(FakeJudgeClient()), texts)
+    assert one["all_gold@10"] == 0.0 and both["all_gold@10"] == 1.0
+
+
+def test_parse_failure_is_not_an_over_refusal_and_is_reported():
+    r = score_item(ITEM, bad_parse(), Judge(FakeJudgeClient()), texts)
+    assert r["over_refusal"] is None and r["parse_failed"] is True and r["fact_recall"] == 0.0
+    m = aggregate([r])
+    assert m["overall"]["parse_failure_rate"]["mean"] == 1.0
+    assert m["overall"]["over_refusal"]["n"] == 0
+
+
+def test_answered_without_citations_scores_zero_faithfulness_and_no_citation_pr_zero():
+    r = score_item(ITEM, out(["220:1"], "answered", ()), Judge(FakeJudgeClient()), texts)
+    assert r["faithfulness"] == 0.0 and r["cit_precision"] == 0.0 and r["cit_recall"] == 0.0
+
+
+def test_citation_pr_only_for_answered_items():
+    r = score_item(ITEM, out(["220:1"], "refused", ()), Judge(FakeJudgeClient()), texts)
+    assert r["cit_precision"] is None and r["cit_recall"] is None
+
+
+def test_trap_with_invalid_citation_fails():
+    ans = AnswerResult("refused", "no", [], [], ["99:9"], False, Usage())
+    r = score_item(TRAP, SystemOutput([], ans, Usage()), Judge(FakeJudgeClient()), texts)
+    assert r["trap_correct"] is False
+
+
+def test_judge_failures_are_counted_per_role():
+    class Broken:
+        model_id = "b"
+
+        def complete(self, request):
+            return LLMResponse("garbage", "b", Usage(), False)
+
+    r = score_item(ITEM, out(["220:1"]), Judge(Broken()), texts)
+    assert r["judge_failed_fact"] is True and r["fact_recall"] is None
+    m = aggregate([r])
+    assert m["judge_failures"]["fact"] == 1 and m["overall"]["fact_recall"]["n"] == 0
+
+
+def test_pointers_per_refusal_reported():
+    ans = AnswerResult("refused", "see", [], ["281.1:16", "281.1:17"], [], False, Usage())
+    r = score_item(ITEM, SystemOutput([], ans, Usage()), Judge(FakeJudgeClient()), texts)
+    assert aggregate([r])["overall"]["pointers_per_refusal"] == 2.0
+
+
+def test_run_eval_counts_missing_answer_as_failure_when_system_has_an_answerer(tmp_path):
+    class Sys:
+        name = "x"
+
+        def run(self, q, lang):
+            return SystemOutput(["220:1"], None, Usage())
+
+        def config(self):
+            return {"answerer": "a"}
+
+    d = run_eval(Sys(), [ITEM], Judge(FakeJudgeClient()), tmp_path, run_id="r2", split="dev",
+                 texts=texts, git_sha="x")
+    row = json.loads((d / "per_item.jsonl").read_text().splitlines()[0])
+    assert row["parse_failed"] is True and row["fact_recall"] == 0.0

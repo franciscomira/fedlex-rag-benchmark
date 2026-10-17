@@ -9,7 +9,14 @@ import json
 import subprocess
 from pathlib import Path
 
-from fedlex_bench.eval.guard import article_text_lookup, log_test_run, require_clean_tree
+from fedlex_bench.eval.guard import (
+    TestRunRefused,
+    article_text_lookup,
+    log_test_done,
+    log_test_start,
+    require_clean_tree,
+    require_frozen,
+)
 from fedlex_bench.eval.judge import Judge
 from fedlex_bench.eval.runner import load_items, run_eval
 from fedlex_bench.eval.systems import PipelineSystem
@@ -94,31 +101,87 @@ def _build(args: argparse.Namespace):
     )
 
 
-def cmd_run(args: argparse.Namespace) -> None:
-    items = load_items(BENCH / f"{args.split}.jsonl")
-    if args.config == "same_lang":
-        items = [i for i in items if i["query_lang"] != "en"]  # undefined for English
-    if args.limit:
-        items = items[: args.limit]
+FROZEN = ROOT / "eval" / "frozen_configs.json"
+TEST_LOG = ROOT / "eval" / "test_runs.log"
+
+
+def _sha256_file(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()[:16] if path.exists() else "missing"
+
+
+def _provenance() -> dict:
+    """Everything outside the code that a reported number depends on (spec section 8)."""
+    from fedlex_bench.agent import prompts as agent_prompts
+    from fedlex_bench.answer import prompt_hash as answer_hash
+    from fedlex_bench.llm import rerank as rerank_mod
+
+    return {
+        "answer_prompt": answer_hash(),
+        "rerank_prompt": rerank_mod.prompt_hash(),
+        "agent_prompts": agent_prompts.prompt_hash(),
+        "benchmark_sha256sums": _sha256_file(BENCH / "SHA256SUMS"),
+        "corpus_parquet": _sha256_file(PARQUET),
+        "price_table": _sha256_file(ROOT / "eval" / "prices.json"),
+        "models_toml": _sha256_file(ROOT / "src" / "fedlex_bench" / "llm" / "models.toml"),
+        "bootstrap_seed": 20261017,
+    }
+
+
+def _prepare(args: argparse.Namespace):
+    """System, judge client and the configuration hash (independent of split and item count)."""
+    from fedlex_bench.eval.judge import prompt_hashes
+
     system = _build(args)
     judge_client = None
     if args.answer:
         from fedlex_bench.llm import build_client
 
         judge_client = build_client(_judge_ref(args.answer, args.judge))
-    settings = {**system.config(), "judge": judge_client.model_id if judge_client else None,
-                "split": args.split, "n_items": len(items)}
-    chash = hashlib.sha256(json.dumps(settings, sort_keys=True).encode()).hexdigest()[:10]
-    run_id = args.run_id or f"{dt.date.today().isoformat()}_{args.split}_{chash}"
+    ident = {
+        "system": system.config(),
+        "judge": judge_client.model_id if judge_client else None,
+        "judge_prompts": prompt_hashes(),
+        "provenance": _provenance(),
+    }
+    chash = hashlib.sha256(json.dumps(ident, sort_keys=True).encode()).hexdigest()[:10]
+    return system, judge_client, chash, ident
+
+
+def cmd_freeze(args: argparse.Namespace) -> None:
+    """Record a configuration (by hash) as frozen for the test run. No model calls."""
+    _, _, chash, ident = _prepare(args)
+    frozen = json.loads(FROZEN.read_text("utf-8")) if FROZEN.exists() else {}
+    frozen[args.name] = {"hash": chash, "system": ident["system"], "judge": ident["judge"]}
+    FROZEN.write_text(json.dumps(frozen, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+    print(f"frozen {args.name}: {chash}")
+
+
+def cmd_run(args: argparse.Namespace) -> None:
+    items = load_items(BENCH / f"{args.split}.jsonl")
+    if args.config == "same_lang":
+        items = [i for i in items if i["query_lang"] != "en"]  # undefined for English
+    if args.split == "test" and (args.limit or args.run_id):
+        raise TestRunRefused("test runs use the whole split and an automatic run id")
+    if args.limit:
+        items = items[: args.limit]
+    system, judge_client, chash, ident = _prepare(args)
+    today = dt.date.today().isoformat()
+    run_id = args.run_id or f"{today}_{args.split}_{chash}"
     git_sha = _git_sha()
     if args.split == "test":
+        name = require_frozen(FROZEN, chash)
         git_sha = require_clean_tree(ROOT)
-        log_test_run(ROOT / "eval" / "test_runs.log", run_id=run_id, config_hash=chash,
-                     date=dt.date.today().isoformat())
+        if (RESULTS / run_id).exists():
+            raise TestRunRefused(f"{run_id} already exists; test results are never overwritten")
+        log_test_start(TEST_LOG, run_id=run_id, config_hash=chash, date=today)
+        print(f"test run of frozen configuration {name} ({chash})")
     judge = Judge(judge_client) if judge_client else Judge(_NoJudge())
     out = run_eval(system, items, judge, RESULTS, run_id=run_id, split=args.split,
                    texts=article_text_lookup(PARQUET), git_sha=git_sha,
-                   extra_config={"config_hash": chash})
+                   extra_config={"config_hash": chash, "provenance": ident["provenance"],
+                                 "judge_prompts": ident["judge_prompts"]})
+    if args.split == "test":
+        log_test_done(TEST_LOG, run_id=run_id, config_hash=chash, date=today)
     print(out)
 
 
@@ -144,12 +207,22 @@ def cmd_compare(args: argparse.Namespace) -> None:
         path = RESULTS / run / "per_item.jsonl"
         return {r["id"]: r for r in map(json.loads, path.read_text("utf-8").splitlines())}
 
+    def cfg(run: str) -> dict:
+        return json.loads((RESULTS / run / "config.json").read_text("utf-8"))
+
+    ca, cb = cfg(args.run_a), cfg(args.run_b)
+    for key in ("split", "judge_model"):
+        if ca.get(key) != cb.get(key):
+            raise SystemExit(f"runs differ in {key}: {ca.get(key)!r} vs {cb.get(key)!r}")
     a, b = rows(args.run_a), rows(args.run_b)
     print(f"A = {args.run_a}")
     print(f"B = {args.run_b}   (paired bootstrap of A - B, 95% CI)")
     for metric in args.metrics:
         ids = [i for i in sorted(a) if i in b and a[i].get(metric) is not None
                and b[i].get(metric) is not None]
+        if not ids:
+            print(f"{metric:14s} no shared items with a value")
+            continue
         d = paired_bootstrap([float(a[i][metric]) for i in ids], [float(b[i][metric]) for i in ids],
                              [a[i]["group"] for i in ids])
         verdict = "differs" if d["lo"] > 0 or d["hi"] < 0 else "no claim"
@@ -169,13 +242,19 @@ def main(argv: list[str] | None = None) -> None:
     r.add_argument("--agent", help="model ref for the ADK planner/checker; runs the agent system")
     r.add_argument("--translate", help="model ref: LLM query translation + per-language retrieval")
     r.add_argument("--max-rounds", type=int, default=3)
-    r.add_argument("--judge", help="model ref; default by answerer family")
+    r.add_argument("--judge", help="model ref; default gpt-6.1-sol")
     r.add_argument("--retrieve-k", type=int, default=60)
     r.add_argument("--rerank-k", type=int, default=30)
     r.add_argument("--answer-articles", type=int, default=5)
     r.add_argument("--limit", type=int, default=0)
     r.add_argument("--run-id")
     r.set_defaults(fn=cmd_run)
+    fz = sub.add_parser("freeze", parents=[], conflict_handler="resolve")
+    for action in r._actions:
+        if action.dest not in ("help", "run_id", "limit", "split"):
+            fz._add_action(action)
+    fz.add_argument("--name", required=True)
+    fz.set_defaults(fn=cmd_freeze, split="dev", run_id=None, limit=0)
     c = sub.add_parser("compare")
     c.add_argument("run_a")
     c.add_argument("run_b")

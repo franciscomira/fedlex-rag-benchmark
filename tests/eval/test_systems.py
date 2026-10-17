@@ -87,3 +87,16 @@ def test_translation_system_fuses_per_language_retrievals_and_counts_translation
     assert set(out.ranked_article_ids) == {"a:1", "b:2", "c:3"}
     assert out.usage.cost_usd == 0.01 and out.usage.calls == 1
     assert s.config()["kind"] == "translate_retrieve"
+
+
+def test_candidates_dropped_by_the_reranker_are_appended_in_original_order():
+    class Dropper:
+        name = "drop"
+
+        def rerank(self, query, query_lang, candidates, k):
+            return RetrievalResult([candidates[1]], Usage())  # returns only one of the two
+
+    s = PipelineSystem(FakeRetriever(), reranker=Dropper(), retrieve_k=5, rerank_k=2)
+    out = s.run("q", "de")
+    assert out.ranked_article_ids == ["a:1", "b:2", "c:3", "d:4"]
+    # candidates[1] is a:1 (fr); a:1 (de) is appended after it, then the unreranked tail

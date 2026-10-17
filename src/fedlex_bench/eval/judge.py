@@ -3,17 +3,18 @@
 from __future__ import annotations
 
 import hashlib
-import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from fedlex_bench.llm.jsonutil import extract_json
 from fedlex_bench.types import LLMClient, LLMRequest, Usage
 
 PROMPT_DIR = Path(__file__).parent / "prompts"
 ROLES = ("facts", "faithfulness", "trap")
-MAX_ARTICLE_CHARS = 6000
+MAX_OUTPUT_TOKENS = 2000
+RETRY_NOTE = "\n\nReply with compact JSON only."
 
 
 def _prompt(role: str) -> str:
@@ -55,15 +56,19 @@ class Judge:
     def _ask(self, role: str, user: str) -> tuple[dict | None, Usage]:
         """One call, one retry on unparseable output. Returns (parsed or None, usage)."""
         usage = Usage()
-        for _ in range(2):
+        for attempt in range(2):
+            # the retry must differ from the first request, or the cache replays the failure
             resp = self.client.complete(
-                LLMRequest(system=_prompt(role), user=user, temperature=0.0, json_output=True)
+                LLMRequest(
+                    system=_prompt(role),
+                    user=user + (RETRY_NOTE if attempt else ""),
+                    max_output_tokens=MAX_OUTPUT_TOKENS,
+                    temperature=0.0,
+                    json_output=True,
+                )
             )
             usage = usage + resp.usage
-            try:
-                parsed = json.loads(resp.text)
-            except json.JSONDecodeError:
-                continue
+            parsed = extract_json(resp.text)
             if isinstance(parsed, dict):
                 return parsed, usage
         return None, usage
@@ -74,14 +79,18 @@ class Judge:
         parsed, usage = self._ask("facts", user)
         if parsed is None or not isinstance(parsed.get("facts"), list):
             return FactResult([], None, True, usage)
-        said = {e.get("index"): e.get("supported") is True for e in parsed["facts"]
-                if isinstance(e, dict)}
-        verdicts = [said.get(i, False) for i in range(len(gold_facts))]
+        entries = [e for e in parsed["facts"] if isinstance(e, dict)]
+        if sorted(e.get("index") for e in entries if isinstance(e.get("index"), int)) != list(
+            range(len(gold_facts))
+        ):
+            return FactResult([], None, True, usage)  # indices must be exactly 0..n-1
+        said = {e["index"]: e.get("supported") is True for e in entries}
+        verdicts = [said[i] for i in range(len(gold_facts))]
         return FactResult(verdicts, sum(verdicts) / len(verdicts), False, usage)
 
     def faithfulness(self, answer: str, cited_texts: Mapping[str, str]) -> FaithResult:
         arts = "\n\n".join(
-            f"[{aid}]\n{text[:MAX_ARTICLE_CHARS]}" for aid, text in sorted(cited_texts.items())
+            f"[{aid}]\n{text}" for aid, text in sorted(cited_texts.items())
         )
         parsed, usage = self._ask("faithfulness", f"Answer:\n{answer}\n\nCited articles:\n{arts}")
         if parsed is None or not isinstance(parsed.get("claims"), list):

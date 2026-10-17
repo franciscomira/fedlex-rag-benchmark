@@ -27,9 +27,10 @@ def test_fact_verdicts_parsed_and_aligned_to_gold_facts():
     assert c.requests[0].json_output and c.requests[0].temperature == 0.0
 
 
-def test_fact_verdicts_missing_index_counts_unsupported():
-    c = FakeClient([json.dumps({"facts": []})])
-    assert Judge(c).fact_recall("q", "a", FACTS).score == 0.0
+def test_fact_verdicts_with_a_missing_index_are_a_judge_failure_not_a_zero():
+    c = FakeClient([json.dumps({"facts": []})] * 2)
+    r = Judge(c).fact_recall("q", "a", FACTS)
+    assert r.failed and r.score is None
 
 
 def test_unparseable_judge_reply_retries_once_then_fails():
@@ -56,3 +57,32 @@ def test_trap_leak_flag():
 
 def test_prompt_hashes_cover_all_roles():
     assert set(prompt_hashes()) == {"facts", "faithfulness", "trap"}
+
+
+def test_fenced_json_is_accepted():
+    c = FakeClient(['```json\n{"facts": [{"index": 0, "supported": true}]}\n```'])
+    assert Judge(c).fact_recall("q", "a", FACTS).score == 1.0
+
+
+def test_retry_request_differs_from_first_and_has_room_for_long_output():
+    c = FakeClient(["nope", "nope"])
+    Judge(c).fact_recall("q", "a", FACTS)
+    assert c.requests[0] != c.requests[1] and c.requests[0].max_output_tokens >= 2000
+
+
+def test_fact_indices_must_cover_exactly_the_gold_facts():
+    two = FACTS + [{"text": "Second.", "article_id": "220:335c"}]
+    bad = [{"index": 1, "supported": True}, {"index": 2, "supported": True}]  # 1-based
+    r = Judge(FakeClient([json.dumps({"facts": bad})] * 2)).fact_recall("q", "a", two)
+    assert r.failed and r.score is None
+
+
+def test_empty_gold_facts_is_a_failure_not_a_crash():
+    r = Judge(FakeClient(["{}"])).fact_recall("q", "a", [])
+    assert r.failed
+
+
+def test_faithfulness_does_not_truncate_the_provided_text():
+    c = FakeClient([json.dumps({"claims": []})])
+    Judge(c).faithfulness("a", {"220:1": "x" * 9000})
+    assert "x" * 9000 in c.requests[0].user
