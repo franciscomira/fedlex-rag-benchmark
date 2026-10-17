@@ -136,3 +136,31 @@ The small judges were lenient: luna called 11 facts stated that the reviewer mar
 Self-preference check for sol vs claude-sonnet-5-5 on dev answers (`selfpref_sol_sonnet.json`, gap = sol minus sonnet): Claude answers -0.10 [-0.18, -0.02], GPT answers -0.04 [-0.10, +0.02], Gemini answers -0.03 [-0.07, 0.00]. Sonnet scores Claude's answers about 0.06 to 0.07 higher relative to sol than it scores the others (a hint of same-family favouring by the Claude judge); sol shows no sign of favouring GPT answers (its GPT gap equals its Gemini gap). So the primary judge's family does not visibly inflate the GPT answerer.
 
 Limitations to report: 30 answers, one non-lawyer English-only labeller working from machine glosses, one labelling pass independent of any judge; judge agreement of about 80% means fact-recall differences below a few points are not resolvable by the judge either.
+
+### 2026-10-17: dev table with the primary judge (gpt-6.1-sol), the three answering systems
+
+Runs `dev_sol_B_singleshot`, `dev_sol_C_translate`, `dev_sol_D_agent` (all Claude Haiku 5.5 for rerank/translate/plan/answer). n=58 answerable + 5 traps; judge cost 1.11 USD for the three.
+
+| System | R@10 | MRR | Fact recall | Faithful | Cit P | Cit R | Cost/q USD | p50 / p95 s | Traps |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| B single-shot | 0.66 [0.50, 0.81] | 0.67 | 0.54 [0.42, 0.67] | 0.82 [0.77, 0.87] | 0.40 | 0.66 | 0.0021 | 5.9 / 11.4 | 5/5 |
+| C translate-then-retrieve | 0.79 [0.63, 0.92] | 0.80 | 0.66 [0.52, 0.79] | 0.86 [0.81, 0.91] | 0.46 | 0.79 | 0.0029 | 11.4 / 18.2 | 4/5 |
+| D ADK agent | 0.97 [0.91, 1.00] | 0.93 | 0.72 [0.61, 0.84] | 0.85 [0.81, 0.89] | 0.53 | 0.93 | 0.0027 | 16.5 / 38.0 | 4/5 |
+
+Paired (A - B): C vs B recall@10 +0.13 [+0.03, +0.24], fact recall +0.12 [+0.03, +0.21], faithfulness +0.05 [+0.01, +0.09]: claimable. D vs B recall@10 +0.30 [+0.15, +0.48], fact recall +0.18 [+0.02, +0.35]: claimable; faithfulness no claim. D vs C recall@10 +0.17 [+0.03, +0.35] claimable; fact recall +0.06 [-0.11, +0.24] and faithfulness -0.01: no claim. With the stronger judge, the agent's answer quality edge over single-shot becomes claimable, and its edge over the translation control stays unproven; retrieval recall is where the agent clearly wins.
+
+**Run-to-run noise (measured):** the agent's dev recall@10 went from 0.93 (`dev_agent_haiku_v2`) to 0.97 (`dev_sol_D_agent`) with an identical configuration. 5 of 63 items changed; the 4 answerer parse failures of the first run did not recur (failed calls are not cached, so they are retried on a rerun; 208 of 222 model calls were cache hits). So one agent run carries a noise of a few points from transient provider failures, and this is the reason the report states `malformed_output` counts and does not read single items. Recall@10 0.97 is above the "too good" line of 95%, so I checked again: same explanation as before (the agent searches in the article's language; Phase 1's blind solver found 149 of 150 gold articles), and the CI lower bound is 0.91. Reported as it is, with that caveat, and the test split will show whether it holds.
+
+## Freeze for the test run (written 2026-10-17, before any test number exists)
+
+Four configurations, each run once on `benchmark/v1/test.jsonl` (179 items: 125 originals + 54 translations), primary judge `gpt-6.1-sol`, clean git tree, logged in `eval/test_runs.log`. Models are the dated ids pinned in `src/fedlex_bench/llm/models.toml` and prices in `eval/prices.json` (2026-10-17).
+
+| ID | System | Command (run on test with `--split test`) |
+| --- | --- | --- |
+| A | Retrieval baseline, no model: hybrid, all_lang, article chunks | `run --method hybrid --config all_lang` |
+| B | Single-shot: A + Haiku rerank (150 retrieved, first 60 reranked) + Haiku cited answer, top 5 articles | `run --method hybrid --config all_lang --rerank claude-haiku-5-5 --retrieve-k 150 --rerank-k 60 --answer claude-haiku-5-5` |
+| C | Translate-then-retrieve: Haiku translates the query into DE/FR/IT, per-language hybrid (60 each), RRF, Haiku rerank 60, Haiku answer | `run --method hybrid --translate claude-haiku-5-5 --rerank claude-haiku-5-5 --retrieve-k 60 --rerank-k 60 --answer claude-haiku-5-5` |
+| D | ADK agent: Haiku planner and checker, per-language hybrid retrievers, up to 3 rounds, Haiku answerer | `run --method hybrid --agent claude-haiku-5-5 --answer claude-haiku-5-5` |
+
+Why these four: A is the no-model floor; B is the standard reranker-plus-answerer baseline; C is the control that isolates query translation; D is the agent. Not frozen, with reasons: GPT and Gemini answerers (no difference on dev once judged by one judge), Sonnet reranker (identical recall to Haiku at 20x the cost), paragraph and window chunks (no gain), other index configurations (cross-lingual all_lang is the headline setting; the matrix stays a dev result).
+Hypotheses stated now: D > C > B on recall@10 and fact recall; the C vs B gap is claimable on test; D vs C answer quality is unlikely to be resolvable with 110 answerable test items.
