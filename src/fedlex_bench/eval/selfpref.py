@@ -17,7 +17,6 @@ from fedlex_bench.eval.judge import Judge
 from fedlex_bench.eval.runner import load_items
 from fedlex_bench.eval.stats import paired_bootstrap
 
-JUDGES = (DEFAULT_JUDGE, GPT_ANSWERER_JUDGE)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -25,7 +24,10 @@ def main(argv: list[str] | None = None) -> None:
 
     p = argparse.ArgumentParser()
     p.add_argument("runs", nargs="+")
+    p.add_argument("--judges", nargs=2, default=[DEFAULT_JUDGE, GPT_ANSWERER_JUDGE])
+    p.add_argument("--out", default="selfpref.json")
     args = p.parse_args(argv)
+    JUDGES = tuple(args.judges)
     items = {i["id"]: i for i in load_items(BENCH / "dev.jsonl")}
     judges = {m: Judge(build_client(m)) for m in JUDGES}
     report = {}
@@ -49,7 +51,7 @@ def main(argv: list[str] | None = None) -> None:
         report[run] = {"n": len(groups), f"mean_{a}": sum(scores[a]) / len(groups),
                        f"mean_{b}": sum(scores[b]) / len(groups), "gap_a_minus_b": gap}
         print(run, json.dumps(report[run]))
-    (RESULTS / "selfpref.json").write_text(json.dumps(report, indent=1), encoding="utf-8")
+    (RESULTS / args.out).write_text(json.dumps(report, indent=1), encoding="utf-8")
 
 
 if __name__ == "__main__":

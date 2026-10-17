@@ -111,3 +111,28 @@ Paragraph chunks are worse by about 9 to 12 points (CIs overlap, so not claimed)
 **Consequence:** the earlier single-shot table judged the GPT answers with the Gemini judge (the spec's family rule) and the others with luna, so its "GPT best" (0.64 vs 0.55 and 0.50) was a judge artifact. With one judge (gpt-6-luna) for all three (`dev_ans_gpt-6-luna_judgeluna`): fact recall Claude 0.55 [0.43, 0.69], GPT 0.51 [0.38, 0.64], Gemini 0.50 [0.39, 0.63], faithfulness 0.77 / 0.83 / 0.79. The three answerers are indistinguishable on dev. **Rule from now on: cross-model comparisons use one judge for all rows (gpt-6-luna) and the other judge is a sensitivity check;** the spec's per-family judge rule is amended below. Which judge is closer to a human is for the calibration to decide.
 
 Window vs article chunks, with answers (Haiku, same judge): fact recall 0.51 [0.39, 0.63] vs 0.55 [0.43, 0.69], faithfulness 0.75 vs 0.77, cost equal. No difference; article chunks stay the default (simpler, same quality).
+
+### 2026-10-17: judge calibration against 30 hand-labelled dev answers (63 fact labels + 5 trap labels)
+
+Sheet: blind, answers from the three single-shot dev runs, with machine English glosses (the reviewer reads English only). Labels via the local page (`python -m fedlex_bench.eval.calibration label`). Files: `eval/calibration/` (`labels_first_pass.json`, `labels.json` revised, `agreement_first_pass.json`, `agreement_revised.json`).
+
+**First pass (independent of any judge)**, raw fact agreement / kappa, traps 5/5 for every judge:
+
+| Judge | Fact agreement | Kappa |
+| --- | --- | --- |
+| gpt-6.1-sol | 51/63 = 0.81 | 0.61 |
+| claude-sonnet-5-5 | 44/56 = 0.79 (7 facts unparsable) | 0.57 |
+| gpt-6-luna | 48/63 = 0.76 | 0.52 |
+| claude-haiku-5-5 | 46/63 = 0.73 | 0.48 |
+| gemini-3.6-flash | 45/63 = 0.71 | 0.46 |
+| gemini-3.5-flash-lite | 44/63 = 0.70 | 0.43 |
+
+The small judges were lenient: luna called 11 facts stated that the reviewer marked not stated, and the reverse only 4 times. This hit the stop rule (below 80%), so I asked; the user had the 15 luna-disagreement facts shown with the judge's verdict and rechecked them.
+
+**Caveat on the revised labels.** After the recheck, all 15 flagged labels were changed to the judge's verdict, so luna agrees 63/63 with the revised labels. Showing the judge's answer next to the label invites anchoring, and flipping all 15 means the revised agreement for luna (and, since the judges mostly agree, for the others: sol 0.95, sonnet 0.96, haiku 0.90, Gemini 3.6 0.89, Flash-Lite 0.87) is not independent evidence. **The first-pass table is the number to report.** The revised labels are kept only to show how stable the ranking is: sol and sonnet stay on top.
+
+**Decision: gpt-6.1-sol is the primary judge for all answerers** (best first-pass agreement, 81%, just over the 80% bar; the margin over luna is 3 facts, so not a significant difference). Cost: about 0.003 to 0.005 USD per judged answer.
+
+Self-preference check for sol vs claude-sonnet-5-5 on dev answers (`selfpref_sol_sonnet.json`, gap = sol minus sonnet): Claude answers -0.10 [-0.18, -0.02], GPT answers -0.04 [-0.10, +0.02], Gemini answers -0.03 [-0.07, 0.00]. Sonnet scores Claude's answers about 0.06 to 0.07 higher relative to sol than it scores the others (a hint of same-family favouring by the Claude judge); sol shows no sign of favouring GPT answers (its GPT gap equals its Gemini gap). So the primary judge's family does not visibly inflate the GPT answerer.
+
+Limitations to report: 30 answers, one non-lawyer English-only labeller working from machine glosses, one labelling pass independent of any judge; judge agreement of about 80% means fact-recall differences below a few points are not resolvable by the judge either.

@@ -1,0 +1,775 @@
+{
+ "gpt-6-luna": {
+  "facts": {
+   "n": 63,
+   "agree": 63,
+   "raw": 1.0,
+   "kappa": 1.0
+  },
+  "traps": {
+   "n": 5,
+   "agree": 5,
+   "raw": 1.0
+  },
+  "overall_raw": 1.0,
+  "n_items_labelled": 30,
+  "n_items_scored": 30,
+  "judge_facts": {
+   "v1-0001": [
+    true,
+    true,
+    true
+   ],
+   "v1-0008": [
+    true,
+    true,
+    true
+   ],
+   "v1-0010-de": [
+    false,
+    false,
+    true
+   ],
+   "v1-0010-it": [
+    false,
+    false,
+    true
+   ],
+   "v1-0011": [
+    false,
+    true
+   ],
+   "v1-0011-en": [
+    false,
+    false
+   ],
+   "v1-0011-fr": [
+    false,
+    false
+   ],
+   "v1-0015": [
+    false,
+    false,
+    false
+   ],
+   "v1-0017-en": [
+    false,
+    false
+   ],
+   "v1-0017-it": [
+    false,
+    true
+   ],
+   "v1-0019": [
+    true,
+    true
+   ],
+   "v1-0020": [
+    true,
+    true,
+    false,
+    false
+   ],
+   "v1-0021-it": [
+    false,
+    true
+   ],
+   "v1-0023-de": [
+    true,
+    true,
+    false
+   ],
+   "v1-0023-en": [
+    true,
+    true,
+    false
+   ],
+   "v1-0024": [
+    false,
+    false
+   ],
+   "v1-0024-de": [
+    false,
+    false
+   ],
+   "v1-0024-fr": [
+    false,
+    false
+   ],
+   "v1-0025": [
+    true,
+    true
+   ],
+   "v1-0026": [
+    false,
+    true,
+    false
+   ],
+   "v1-0028": [
+    false,
+    false
+   ],
+   "v1-0032": [
+    true,
+    true,
+    true
+   ],
+   "v1-0033": [
+    false,
+    true,
+    false
+   ],
+   "v1-0036": [
+    true,
+    true,
+    true
+   ],
+   "v1-0037": [
+    true,
+    true
+   ]
+  }
+ },
+ "gpt-6.1-sol": {
+  "facts": {
+   "n": 63,
+   "agree": 60,
+   "raw": 0.9523809523809523,
+   "kappa": 0.9045936395759716
+  },
+  "traps": {
+   "n": 5,
+   "agree": 5,
+   "raw": 1.0
+  },
+  "overall_raw": 0.9558823529411765,
+  "n_items_labelled": 30,
+  "n_items_scored": 30,
+  "judge_facts": {
+   "v1-0001": [
+    true,
+    true,
+    true
+   ],
+   "v1-0008": [
+    true,
+    true,
+    true
+   ],
+   "v1-0010-de": [
+    false,
+    false,
+    true
+   ],
+   "v1-0010-it": [
+    false,
+    false,
+    true
+   ],
+   "v1-0011": [
+    false,
+    false
+   ],
+   "v1-0011-en": [
+    false,
+    false
+   ],
+   "v1-0011-fr": [
+    false,
+    false
+   ],
+   "v1-0015": [
+    false,
+    false,
+    false
+   ],
+   "v1-0017-en": [
+    false,
+    false
+   ],
+   "v1-0017-it": [
+    false,
+    true
+   ],
+   "v1-0019": [
+    true,
+    true
+   ],
+   "v1-0020": [
+    true,
+    true,
+    false,
+    false
+   ],
+   "v1-0021-it": [
+    false,
+    true
+   ],
+   "v1-0023-de": [
+    false,
+    true,
+    false
+   ],
+   "v1-0023-en": [
+    false,
+    true,
+    false
+   ],
+   "v1-0024": [
+    false,
+    false
+   ],
+   "v1-0024-de": [
+    false,
+    false
+   ],
+   "v1-0024-fr": [
+    false,
+    false
+   ],
+   "v1-0025": [
+    true,
+    true
+   ],
+   "v1-0026": [
+    false,
+    true,
+    false
+   ],
+   "v1-0028": [
+    false,
+    false
+   ],
+   "v1-0032": [
+    true,
+    true,
+    true
+   ],
+   "v1-0033": [
+    false,
+    true,
+    false
+   ],
+   "v1-0036": [
+    true,
+    true,
+    true
+   ],
+   "v1-0037": [
+    true,
+    true
+   ]
+  }
+ },
+ "claude-sonnet-5-5": {
+  "facts": {
+   "n": 56,
+   "agree": 54,
+   "raw": 0.9642857142857143,
+   "kappa": 0.9284802043422733
+  },
+  "traps": {
+   "n": 5,
+   "agree": 5,
+   "raw": 1.0
+  },
+  "overall_raw": 0.9672131147540983,
+  "n_items_labelled": 30,
+  "n_items_scored": 27,
+  "judge_facts": {
+   "v1-0001": [
+    true,
+    true,
+    true
+   ],
+   "v1-0008": [
+    true,
+    true,
+    true
+   ],
+   "v1-0010-de": [
+    false,
+    false,
+    true
+   ],
+   "v1-0010-it": [
+    true,
+    false,
+    true
+   ],
+   "v1-0011-en": [
+    false,
+    false
+   ],
+   "v1-0011-fr": [
+    false,
+    false
+   ],
+   "v1-0015": [
+    false,
+    false,
+    false
+   ],
+   "v1-0017-en": [
+    false,
+    false
+   ],
+   "v1-0017-it": [
+    false,
+    true
+   ],
+   "v1-0019": [
+    true,
+    true
+   ],
+   "v1-0020": [
+    true,
+    true,
+    false,
+    false
+   ],
+   "v1-0023-en": [
+    false,
+    true,
+    false
+   ],
+   "v1-0024": [
+    false,
+    false
+   ],
+   "v1-0024-de": [
+    false,
+    false
+   ],
+   "v1-0024-fr": [
+    false,
+    false
+   ],
+   "v1-0025": [
+    true,
+    true
+   ],
+   "v1-0026": [
+    false,
+    true,
+    false
+   ],
+   "v1-0028": [
+    false,
+    false
+   ],
+   "v1-0032": [
+    true,
+    true,
+    true
+   ],
+   "v1-0033": [
+    false,
+    true,
+    false
+   ],
+   "v1-0036": [
+    true,
+    true,
+    true
+   ],
+   "v1-0037": [
+    true,
+    true
+   ]
+  }
+ },
+ "gemini-3.6-flash": {
+  "facts": {
+   "n": 63,
+   "agree": 56,
+   "raw": 0.8888888888888888,
+   "kappa": 0.77850326469111
+  },
+  "traps": {
+   "n": 5,
+   "agree": 5,
+   "raw": 1.0
+  },
+  "overall_raw": 0.8970588235294118,
+  "n_items_labelled": 30,
+  "n_items_scored": 30,
+  "judge_facts": {
+   "v1-0001": [
+    true,
+    true,
+    true
+   ],
+   "v1-0008": [
+    true,
+    true,
+    true
+   ],
+   "v1-0010-de": [
+    true,
+    false,
+    true
+   ],
+   "v1-0010-it": [
+    true,
+    false,
+    true
+   ],
+   "v1-0011": [
+    true,
+    true
+   ],
+   "v1-0011-en": [
+    false,
+    false
+   ],
+   "v1-0011-fr": [
+    false,
+    false
+   ],
+   "v1-0015": [
+    false,
+    false,
+    false
+   ],
+   "v1-0017-en": [
+    false,
+    false
+   ],
+   "v1-0017-it": [
+    false,
+    true
+   ],
+   "v1-0019": [
+    true,
+    true
+   ],
+   "v1-0020": [
+    true,
+    true,
+    false,
+    false
+   ],
+   "v1-0021-it": [
+    false,
+    true
+   ],
+   "v1-0023-de": [
+    true,
+    true,
+    true
+   ],
+   "v1-0023-en": [
+    true,
+    true,
+    true
+   ],
+   "v1-0024": [
+    false,
+    false
+   ],
+   "v1-0024-de": [
+    false,
+    false
+   ],
+   "v1-0024-fr": [
+    false,
+    false
+   ],
+   "v1-0025": [
+    true,
+    true
+   ],
+   "v1-0026": [
+    false,
+    true,
+    true
+   ],
+   "v1-0028": [
+    false,
+    false
+   ],
+   "v1-0032": [
+    true,
+    true,
+    true
+   ],
+   "v1-0033": [
+    true,
+    true,
+    false
+   ],
+   "v1-0036": [
+    true,
+    true,
+    true
+   ],
+   "v1-0037": [
+    true,
+    true
+   ]
+  }
+ },
+ "gemini-3.5-flash-lite": {
+  "facts": {
+   "n": 63,
+   "agree": 55,
+   "raw": 0.873015873015873,
+   "kappa": 0.746987951807229
+  },
+  "traps": {
+   "n": 5,
+   "agree": 5,
+   "raw": 1.0
+  },
+  "overall_raw": 0.8823529411764706,
+  "n_items_labelled": 30,
+  "n_items_scored": 30,
+  "judge_facts": {
+   "v1-0001": [
+    true,
+    true,
+    true
+   ],
+   "v1-0008": [
+    true,
+    true,
+    true
+   ],
+   "v1-0010-de": [
+    true,
+    false,
+    true
+   ],
+   "v1-0010-it": [
+    true,
+    false,
+    true
+   ],
+   "v1-0011": [
+    true,
+    true
+   ],
+   "v1-0011-en": [
+    false,
+    false
+   ],
+   "v1-0011-fr": [
+    false,
+    false
+   ],
+   "v1-0015": [
+    false,
+    false,
+    false
+   ],
+   "v1-0017-en": [
+    false,
+    false
+   ],
+   "v1-0017-it": [
+    false,
+    true
+   ],
+   "v1-0019": [
+    true,
+    true
+   ],
+   "v1-0020": [
+    true,
+    true,
+    false,
+    false
+   ],
+   "v1-0021-it": [
+    true,
+    true
+   ],
+   "v1-0023-de": [
+    true,
+    true,
+    true
+   ],
+   "v1-0023-en": [
+    true,
+    true,
+    true
+   ],
+   "v1-0024": [
+    false,
+    false
+   ],
+   "v1-0024-de": [
+    false,
+    false
+   ],
+   "v1-0024-fr": [
+    false,
+    false
+   ],
+   "v1-0025": [
+    true,
+    true
+   ],
+   "v1-0026": [
+    false,
+    true,
+    true
+   ],
+   "v1-0028": [
+    false,
+    false
+   ],
+   "v1-0032": [
+    true,
+    true,
+    true
+   ],
+   "v1-0033": [
+    true,
+    true,
+    false
+   ],
+   "v1-0036": [
+    true,
+    true,
+    true
+   ],
+   "v1-0037": [
+    true,
+    true
+   ]
+  }
+ },
+ "claude-haiku-5-5": {
+  "facts": {
+   "n": 63,
+   "agree": 57,
+   "raw": 0.9047619047619048,
+   "kappa": 0.8100502512562815
+  },
+  "traps": {
+   "n": 5,
+   "agree": 5,
+   "raw": 1.0
+  },
+  "overall_raw": 0.9117647058823529,
+  "n_items_labelled": 30,
+  "n_items_scored": 30,
+  "judge_facts": {
+   "v1-0001": [
+    true,
+    true,
+    true
+   ],
+   "v1-0008": [
+    true,
+    true,
+    true
+   ],
+   "v1-0010-de": [
+    true,
+    false,
+    true
+   ],
+   "v1-0010-it": [
+    true,
+    false,
+    true
+   ],
+   "v1-0011": [
+    true,
+    true
+   ],
+   "v1-0011-en": [
+    false,
+    false
+   ],
+   "v1-0011-fr": [
+    false,
+    false
+   ],
+   "v1-0015": [
+    false,
+    false,
+    false
+   ],
+   "v1-0017-en": [
+    false,
+    false
+   ],
+   "v1-0017-it": [
+    false,
+    true
+   ],
+   "v1-0019": [
+    true,
+    true
+   ],
+   "v1-0020": [
+    true,
+    true,
+    false,
+    false
+   ],
+   "v1-0021-it": [
+    false,
+    true
+   ],
+   "v1-0023-de": [
+    true,
+    true,
+    false
+   ],
+   "v1-0023-en": [
+    true,
+    true,
+    true
+   ],
+   "v1-0024": [
+    false,
+    false
+   ],
+   "v1-0024-de": [
+    false,
+    false
+   ],
+   "v1-0024-fr": [
+    false,
+    false
+   ],
+   "v1-0025": [
+    true,
+    true
+   ],
+   "v1-0026": [
+    false,
+    true,
+    true
+   ],
+   "v1-0028": [
+    false,
+    false
+   ],
+   "v1-0032": [
+    true,
+    true,
+    true
+   ],
+   "v1-0033": [
+    true,
+    true,
+    false
+   ],
+   "v1-0036": [
+    true,
+    true,
+    true
+   ],
+   "v1-0037": [
+    true,
+    true
+   ]
+  }
+ }
+}

@@ -1,14 +1,14 @@
 {
  "v1-0001": {
   "facts": [
-   false,
+   true,
    true,
    true
   ]
  },
  "v1-0008": {
   "facts": [
-   false,
+   true,
    true,
    true
   ]
@@ -17,20 +17,20 @@
   "facts": [
    false,
    false,
-   false
+   true
   ]
  },
  "v1-0010-it": {
   "facts": [
    false,
    false,
-   false
+   true
   ]
  },
  "v1-0011": {
   "facts": [
-   true,
-   false
+   false,
+   true
   ]
  },
  "v1-0011-en": {
@@ -42,7 +42,7 @@
  "v1-0011-fr": {
   "facts": [
    false,
-   true
+   false
   ]
  },
  "v1-0015": {
@@ -66,16 +66,16 @@
  },
  "v1-0019": {
   "facts": [
-   false,
+   true,
    true
   ]
  },
  "v1-0020": {
   "facts": [
-   false,
+   true,
    true,
    false,
-   true
+   false
   ]
  },
  "v1-0021-it": {
@@ -86,16 +86,16 @@
  },
  "v1-0023-de": {
   "facts": [
-   false,
+   true,
    true,
    false
   ]
  },
  "v1-0023-en": {
   "facts": [
-   false,
    true,
-   true
+   true,
+   false
   ]
  },
  "v1-0024": {
@@ -119,13 +119,13 @@
  "v1-0025": {
   "facts": [
    true,
-   false
+   true
   ]
  },
  "v1-0026": {
   "facts": [
    false,
-   false,
+   true,
    false
   ]
  },

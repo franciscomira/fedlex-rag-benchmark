@@ -18,8 +18,8 @@ ROOT = Path(__file__).resolve().parents[3]
 BENCH = ROOT / "benchmark" / "v1"
 RESULTS = ROOT / "eval" / "results"
 PARQUET = ROOT / "data" / "processed" / "articles.parquet"
-DEFAULT_JUDGE = "gpt-6-luna"  # different family from Claude and Gemini answerers
-GPT_ANSWERER_JUDGE = "gemini-3.5-flash-lite"  # spec section 5: GPT answers get a Gemini judge
+DEFAULT_JUDGE = "gpt-6.1-sol"  # primary judge for every answerer (calibration, 2026-10-17)
+GPT_ANSWERER_JUDGE = "gpt-6-luna"  # second judge for sensitivity runs, not a per-family switch
 
 
 def _git_sha() -> str:
@@ -28,11 +28,8 @@ def _git_sha() -> str:
 
 
 def _judge_ref(answer_ref: str | None, explicit: str | None) -> str:
-    if explicit:
-        return explicit
-    if answer_ref and (answer_ref.startswith("openai/") or answer_ref.startswith("gpt-")):
-        return GPT_ANSWERER_JUDGE
-    return DEFAULT_JUDGE
+    """One primary judge for all answerers; pass --judge for a sensitivity run."""
+    return explicit or DEFAULT_JUDGE
 
 
 def _build_agent(args, env, answerer):
