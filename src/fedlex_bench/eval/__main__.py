@@ -40,7 +40,9 @@ def _build(args: argparse.Namespace):
     from fedlex_bench.retrieval import RetrievalEnv
 
     retriever = RetrievalEnv().retriever(args.method, args.config, args.chunking)
-    reranker = LLMReranker(build_client(args.rerank)) if args.rerank else None
+    reranker = (
+        LLMReranker(build_client(args.rerank), max_candidates=args.rerank_k) if args.rerank else None
+    )
     answerer = None
     if args.answer:
         from fedlex_bench.answer import LLMAnswerer
