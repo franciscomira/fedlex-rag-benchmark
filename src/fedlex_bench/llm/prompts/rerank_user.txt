@@ -1,0 +1,7 @@
+Question ({language}):
+{question}
+
+Passages:
+{passages}
+
+Return the JSON object with the {k} most relevant passage numbers, best first.

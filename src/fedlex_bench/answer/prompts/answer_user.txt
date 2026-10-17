@@ -1,0 +1,9 @@
+Question ({language}):
+{question}
+
+Answer in {language}.
+
+Source passages:
+{passages}
+
+Reply with the JSON object only.

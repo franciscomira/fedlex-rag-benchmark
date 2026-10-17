@@ -1,0 +1,3 @@
+
+
+Your previous reply could not be parsed. Reply again with only one JSON object of the form {"status": "answered" or "refused", "answer": "<text>", "citations": ["<id>", ...], "pointers": ["<id>", ...]}. No text before or after it.
