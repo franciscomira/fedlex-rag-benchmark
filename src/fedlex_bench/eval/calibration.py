@@ -110,12 +110,23 @@ GLOSS_SYSTEM = (
 )
 
 
+def _has_labels(path: Path) -> bool:
+    if not path.exists():
+        return False
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return any(
+        v is not None for x in data.values() for v in (x.get("facts") or [x.get("asserts_answer")])
+    )
+
+
 def cmd_sample(args: argparse.Namespace) -> None:
     from fedlex_bench.eval.__main__ import BENCH, RESULTS
     from fedlex_bench.eval.runner import load_items
     from fedlex_bench.llm import build_client
     from fedlex_bench.types import LLMRequest
 
+    if _has_labels(CALIB_DIR / "labels.json"):
+        raise SystemExit("labels.json already has labels; refusing to overwrite it")
     items = {i["id"]: i for s in ("dev",) for i in load_items(BENCH / f"{s}.jsonl")}
     sample = draw_sample(_load_pool(args.runs, RESULTS), seed=SEED)
     client = build_client(args.gloss_model)
@@ -127,6 +138,7 @@ def cmd_sample(args: argparse.Namespace) -> None:
              "machine gloss, labelled as such.", ""]
     template: dict[str, Any] = {}
     meta = []
+    cards = []
     for r in sample:
         it = items[r["id"]]
         gloss = r["answer"]
@@ -141,9 +153,16 @@ def cmd_sample(args: argparse.Namespace) -> None:
             sheet += ["Gold facts:"] + [f"{k}. {f['text']}" for k, f in enumerate(it["gold_facts"])] + [""]
             template[r["id"]] = {"facts": [None] * len(it["gold_facts"])}
         meta.append({"id": r["id"], "run": r["run"], "kind": _kind(r)})
+        cards.append({
+            "id": r["id"], "lang": it["query_lang"], "is_trap": it["is_trap"],
+            "question": it["question"], "reply": r["answer"], "gloss": gloss,
+            "facts": [f["text"] for f in it["gold_facts"]], "trap_reason": it["trap_reason"],
+        })
     (CALIB_DIR / "sheet.md").write_text("\n".join(sheet) + "\n", encoding="utf-8")
     (CALIB_DIR / "labels.json").write_text(json.dumps(template, indent=1), encoding="utf-8")
     (CALIB_DIR / "sample.json").write_text(json.dumps(meta, indent=1), encoding="utf-8")
+    (CALIB_DIR / "items.json").write_text(
+        json.dumps(cards, indent=1, ensure_ascii=False), encoding="utf-8")
     print(f"wrote {CALIB_DIR / 'sheet.md'} ({len(sample)} items)")
 
 
@@ -188,6 +207,76 @@ def cmd_agree(args: argparse.Namespace) -> None:
     print(json.dumps(reports, indent=1))
 
 
+def validate_labels(new: Mapping[str, Any], template: Mapping[str, Any]) -> None:
+    """Refuse a labels file whose ids, keys or list lengths differ from the template."""
+    if set(new) != set(template):
+        raise ValueError("labels must cover exactly the sampled items")
+    for item_id, tpl in template.items():
+        got = new[item_id]
+        if "facts" in tpl:
+            facts = got.get("facts")
+            if not isinstance(facts, list) or len(facts) != len(tpl["facts"]):
+                raise ValueError(f"{item_id}: wrong number of fact labels")
+            if any(v not in (True, False, None) for v in facts):
+                raise ValueError(f"{item_id}: labels must be true, false or null")
+        elif got.get("asserts_answer") not in (True, False, None):
+            raise ValueError(f"{item_id}: asserts_answer must be true, false or null")
+
+
+def cmd_label(args: argparse.Namespace) -> None:
+    """Local labelling page: http://127.0.0.1:<port>, saves every click to labels.json."""
+    import http.server
+    import os
+    import tempfile
+
+    page = (Path(__file__).parent / "label_app.html").read_bytes()
+    items = (CALIB_DIR / "items.json").read_bytes()
+    labels_path = CALIB_DIR / "labels.json"
+    template = json.loads(labels_path.read_text(encoding="utf-8"))
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def _send(self, code: int, body: bytes, ctype: str) -> None:
+            self.send_response(code)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_GET(self) -> None:  # noqa: N802
+            routes = {
+                "/": (page, "text/html; charset=utf-8"),
+                "/items.json": (items, "application/json; charset=utf-8"),
+                "/labels.json": (labels_path.read_bytes(), "application/json; charset=utf-8"),
+            }
+            if self.path in routes:
+                self._send(200, *routes[self.path])
+            else:
+                self._send(404, b"not found", "text/plain")
+
+        def do_POST(self) -> None:  # noqa: N802
+            if self.path != "/labels.json":
+                return self._send(404, b"not found", "text/plain")
+            try:
+                body = self.rfile.read(int(self.headers.get("Content-Length", 0)))
+                new = json.loads(body)
+                validate_labels(new, template)
+            except (ValueError, json.JSONDecodeError) as exc:
+                return self._send(400, str(exc).encode(), "text/plain")
+            fd, tmp = tempfile.mkstemp(dir=CALIB_DIR, suffix=".tmp")
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                json.dump(new, fh, indent=1)
+            os.replace(tmp, labels_path)
+            self._send(200, b"saved", "text/plain")
+
+        def log_message(self, *a: Any) -> None:
+            pass
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
+    print(f"labelling page: http://127.0.0.1:{args.port}  (Ctrl+C to stop)")
+    server.serve_forever()
+
+
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser()
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -195,6 +284,9 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("runs", nargs="+")
     s.add_argument("--gloss-model", default="gemini-3.5-flash-lite")
     s.set_defaults(fn=cmd_sample)
+    lb = sub.add_parser("label")
+    lb.add_argument("--port", type=int, default=8765)
+    lb.set_defaults(fn=cmd_label)
     a = sub.add_parser("agree")
     a.set_defaults(fn=cmd_agree)
     args = p.parse_args(argv)

@@ -35,3 +35,20 @@ def test_agreement_counts_fact_and_trap_labels():
     assert r["facts"] == {"n": 3, "agree": 2, "raw": 2 / 3, "kappa": r["facts"]["kappa"]}
     assert r["traps"] == {"n": 1, "agree": 0, "raw": 0.0}
     assert r["overall_raw"] == 2 / 4
+
+
+def test_validate_labels_checks_ids_lengths_and_values():
+    import pytest
+
+    from fedlex_bench.eval.calibration import validate_labels
+
+    tpl = {"a": {"facts": [None, None]}, "t": {"asserts_answer": None}}
+    validate_labels({"a": {"facts": [True, None]}, "t": {"asserts_answer": False}}, tpl)
+    for bad in (
+        {"a": {"facts": [True]}, "t": {"asserts_answer": False}},
+        {"a": {"facts": [True, "yes"]}, "t": {"asserts_answer": False}},
+        {"a": {"facts": [True, True]}},
+        {"a": {"facts": [True, True]}, "t": {"asserts_answer": 3}},
+    ):
+        with pytest.raises(ValueError):
+            validate_labels(bad, tpl)

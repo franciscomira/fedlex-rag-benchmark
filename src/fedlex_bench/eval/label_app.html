@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Judge calibration labels</title>
+<style>
+  :root {
+    --bg: #fafaf8; --card: #ffffff; --ink: #1c1c1a; --muted: #6b6b66; --line: #dcdcd4;
+    --yes: #1f7a45; --yes-bg: #e4f4ea; --no: #b3392b; --no-bg: #fbe9e6; --accent: #2b5fab;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161614; --card: #1f1f1c; --ink: #ecece6; --muted: #9a9a92; --line: #3a3a35;
+      --yes: #6fcf97; --yes-bg: #1c3326; --no: #f08a7c; --no-bg: #3a211d; --accent: #7aa7e8;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { position: sticky; top: 0; z-index: 2; background: var(--bg);
+           border-bottom: 1px solid var(--line); padding: 10px 16px; }
+  .bar { max-width: 820px; margin: 0 auto; display: flex; gap: 12px; align-items: center;
+         flex-wrap: wrap; }
+  .bar strong { font-size: 15px; }
+  progress { flex: 1; min-width: 120px; height: 10px; }
+  #status { font-size: 13px; color: var(--muted); }
+  main { max-width: 820px; margin: 0 auto; padding: 16px; }
+  .intro { color: var(--muted); font-size: 14px; margin: 0 0 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+          padding: 14px 16px; margin: 0 0 16px; }
+  .card.done { border-color: var(--yes); }
+  .head { display: flex; justify-content: space-between; gap: 8px; font-size: 13px;
+          color: var(--muted); margin-bottom: 6px; }
+  .q { font-weight: 600; margin: 0 0 10px; }
+  .label { font-size: 12px; text-transform: uppercase; letter-spacing: .04em;
+           color: var(--muted); margin: 10px 0 2px; }
+  .reply { white-space: pre-wrap; margin: 0; }
+  details { margin-top: 6px; }
+  details summary { cursor: pointer; font-size: 13px; color: var(--accent); }
+  .fact { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0;
+          border-top: 1px solid var(--line); }
+  .fact:first-of-type { border-top: 0; }
+  .fact p { flex: 1; margin: 0; }
+  .btns { display: flex; gap: 6px; flex-shrink: 0; }
+  button { font: inherit; font-size: 14px; border: 1px solid var(--line); background: var(--card);
+           color: var(--ink); border-radius: 8px; padding: 6px 12px; cursor: pointer;
+           min-width: 64px; }
+  button:hover { border-color: var(--accent); }
+  button.on-yes { background: var(--yes-bg); border-color: var(--yes); color: var(--yes);
+                  font-weight: 600; }
+  button.on-no { background: var(--no-bg); border-color: var(--no); color: var(--no);
+                 font-weight: 600; }
+  .reason { font-size: 14px; background: var(--bg); border-radius: 8px; padding: 8px 10px;
+            margin: 6px 0; }
+  @media (max-width: 560px) { .fact { flex-direction: column; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <strong>Judge calibration</strong>
+    <progress id="bar" value="0" max="1"></progress>
+    <span id="count">0 / 0</span>
+    <span id="status"></span>
+  </div>
+</header>
+<main>
+  <p class="intro">
+    For each gold fact, press <b>Stated</b> if the reply clearly says it, otherwise <b>Not stated</b>.
+    A vague or partial statement, a different number, or a different legal consequence is
+    <b>Not stated</b>. A refusal states no fact. Use only the reply, not outside knowledge.
+    The English text is a machine gloss. For the five traps, press <b>Gives the answer</b> only if the
+    reply states the specific information asked for as if it were established; saying the information
+    is absent, or pointing to where a rule can be found, is <b>Does not</b>. Every click is saved
+    to <code>labels.json</code> at once, so you can stop and come back.
+  </p>
+  <div id="cards"></div>
+</main>
+<script>
+let items = [], labels = {};
+const $ = (id) => document.getElementById(id);
+let saveTimer = null;
+
+function el(tag, attrs = {}, ...kids) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") n.className = v; else if (k === "text") n.textContent = v;
+    else n.setAttribute(k, v);
+  }
+  for (const k of kids) n.append(k);
+  return n;
+}
+
+function slotsOf(item) { return item.is_trap ? [labels[item.id].asserts_answer]
+                                              : labels[item.id].facts; }
+function isDone(item) { return slotsOf(item).every((v) => v !== null); }
+
+function updateProgress() {
+  const total = items.reduce((n, it) => n + slotsOf(it).length, 0);
+  const done = items.reduce((n, it) => n + slotsOf(it).filter((v) => v !== null).length, 0);
+  $("bar").max = total; $("bar").value = done;
+  $("count").textContent = `${done} / ${total} labels`;
+  document.querySelectorAll(".card").forEach((c) => {
+    c.classList.toggle("done", isDone(items.find((i) => i.id === c.dataset.id)));
+  });
+}
+
+function save() {
+  $("status").textContent = "saving...";
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    try {
+      const r = await fetch("/labels.json", { method: "POST", body: JSON.stringify(labels) });
+      $("status").textContent = r.ok ? "saved" : "NOT saved: " + await r.text();
+    } catch (e) { $("status").textContent = "NOT saved (is the server still running?)"; }
+  }, 150);
+}
+
+function setLabel(item, index, value, buttons) {
+  const cur = slotsOf(item)[index];
+  const next = cur === value ? null : value;  // click again to clear
+  if (item.is_trap) labels[item.id].asserts_answer = next; else labels[item.id].facts[index] = next;
+  buttons[0].className = next === true ? "on-yes" : "";
+  buttons[1].className = next === false ? "on-no" : "";
+  updateProgress(); save();
+}
+
+function addButtons(item, index, yesText, noText) {
+  const yes = el("button", { type: "button", text: yesText });
+  const no = el("button", { type: "button", text: noText });
+  const cur = slotsOf(item)[index];
+  yes.className = cur === true ? "on-yes" : ""; no.className = cur === false ? "on-no" : "";
+  const pair = [yes, no];
+  yes.onclick = () => setLabel(item, index, true, pair);
+  no.onclick = () => setLabel(item, index, false, pair);
+  return el("div", { class: "btns" }, yes, no);
+}
+
+function render() {
+  const root = $("cards");
+  items.forEach((item, n) => {
+    const card = el("section", { class: "card" });
+    card.dataset.id = item.id;
+    card.append(el("div", { class: "head" },
+      el("span", { text: `${n + 1} of ${items.length}` }),
+      el("span", { text: `${item.id} · question language ${item.lang}` })));
+    card.append(el("p", { class: "q", text: item.question }));
+    if (item.is_trap && item.trap_reason)
+      card.append(el("div", { class: "reason", text: "Why the corpus cannot answer this: " + item.trap_reason }));
+    card.append(el("div", { class: "label", text: "Reply (machine English gloss)" }));
+    card.append(el("p", { class: "reply", text: item.gloss || "(empty reply)" }));
+    if (item.reply && item.reply !== item.gloss) {
+      const d = el("details", {}, el("summary", { text: "Original reply" }),
+                   el("p", { class: "reply", text: item.reply }));
+      card.append(d);
+    }
+    if (item.is_trap) {
+      card.append(el("div", { class: "label", text: "Does the reply state the information the question asks for?" }));
+      card.append(el("div", { class: "fact" }, el("p", { text: "Gives the specific answer as if established" }),
+        addButtons(item, 0, "Gives the answer", "Does not")));
+    } else {
+      card.append(el("div", { class: "label", text: "Gold facts: is each one stated by the reply?" }));
+      item.facts.forEach((f, i) => {
+        card.append(el("div", { class: "fact" }, el("p", { text: `${i}. ${f}` }),
+          addButtons(item, i, "Stated", "Not stated")));
+      });
+    }
+    root.append(card);
+  });
+  updateProgress();
+}
+
+(async () => {
+  items = await (await fetch("/items.json")).json();
+  labels = await (await fetch("/labels.json")).json();
+  render();
+})();
+</script>
+</body>
+</html>
