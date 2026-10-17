@@ -1,0 +1,10 @@
+# Project-wide settings read by the harness. Secrets live in .env, never here.
+[budget]
+monthly_usd = 25.0          # hard cap across all paid providers (set 2026-10-17)
+confirm_fraction = 0.2      # a run projected above this fraction of the cap needs explicit approval
+confirm_usd = 5.0           # = monthly_usd * confirm_fraction
+
+[providers]
+anthropic = "ANTHROPIC_API_KEY"   # small prepaid key, 5-10 USD
+openai = "OPENAI_API_KEY"
+google = "GEMINI_API_KEY"
