@@ -7,9 +7,8 @@ Plan: `docs/prompts/phase2_kickoff.md`. Spec: `docs/eval_spec.md` (approved 2026
 - Step 0 housekeeping: done (repo already public with tag `benchmark-v1`; budget cap 25 USD in `config.toml`, confirm threshold 5 USD).
 - Step 1 eval spec: done, approved with the draft's choices (judge pairing, English gloss for calibration, pointers allowed on refusals).
 - Step 2 build: done and committed (retrieval, llm/answer, agent, eval core, CLI `python -m fedlex_bench.eval run|report`). All tests pass offline.
-- Old note (superseded): Lead part done (`src/fedlex_bench/eval/`: metrics, bootstrap, judge roles, runner, guards; interfaces in `src/fedlex_bench/types.py`). Three subagents building `retrieval/`, `llm/` + `answer/`, `agent/` against the interfaces; no live API calls until `.env` exists.
-- Still to do in the lead part: CLI (`python -m fedlex_bench.eval run|report`), results table, calibration sheet generator.
-- Blocked on the user: Anthropic API key (small prepaid), OpenAI key, Gemini key into `.env`.
+- Still to do (lead): calibration sheet generator, cross-family benchmark check script (Step 3).
+- Blocked on the user: Anthropic (small prepaid), OpenAI and Gemini keys in `.env`; every next step (reranker, answering, judge, Step 3) is a paid call.
 
 ## Experiment log
 
