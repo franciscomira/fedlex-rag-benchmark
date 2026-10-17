@@ -72,3 +72,34 @@ The reranker lifts every cell by 8 to 26 points. The reranker's gain is largest 
 Conditional on the gold article being in the 5 articles shown (40 of 58 items): fact recall 0.78 (Claude), 0.90 (GPT), 0.71 (Gemini), and zero refusals. When it is not shown (18 items): fact recall about 0.05 and refusals 44% / 61% / 89%. So most of the fact-recall gap to 1.0 is retrieval, and refusing when the answer is missing is the right behaviour; the "over-refusal rate" must always be read together with context recall. Differences between answerers are inside the CIs (and confounded by the judge change for GPT); no ranking claimed. Citation precision is low because the models cite every article they used, often 2 or 3 for a one-article gold. Trap accuracy 5/5 everywhere says nothing (n=5). Cost of every row is under 0.003 USD per query.
 
 Calibration sheet for the user drawn from these three runs: `eval/calibration/sheet.md` (30 answers, blind), labels go in `eval/calibration/labels.json`; then `python -m fedlex_bench.eval.calibration agree`.
+
+### 2026-10-17: ADK agent, translate-then-retrieve control, chunking ablation (dev, live, all Haiku 5.5 unless noted)
+
+**Bug found and fixed first.** The first agent run (`dev_agent_haiku`, kept only as a record) refused 33 of 58 answerable questions: the citation checker's JSON was cut off at its 600-token cap in 88 of 130 calls, "unparsable" output fails closed (all citations rejected), and the retry sent an identical request, which the cache answered with the same truncated text. Fix: checker cap 2000 tokens, planner 1500, and the retry request now differs. That is a harness bug fixed on dev, not tuning on test. Its metrics (fact recall 0.30) are not a result.
+
+**Agent vs controls**, n=58 answerable dev items (+5 traps), same judge for all rows (gpt-6-luna), 95% group-bootstrap CIs. Runs: `dev_ans_claude-haiku-5-5` (single-shot), `dev_translate_haiku`, `dev_agent_haiku_v2`.
+
+| System | R@10 | MRR | Fact recall | Faithful | Cost/q USD | p50 / p95 s | Traps |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Single-shot (hybrid all_lang + rerank N=60 + answer) | 0.66 [0.50, 0.81] | 0.67 | 0.55 [0.43, 0.69] | 0.77 | 0.0021 | 5.9 / 11.5 | 5/5 |
+| Translate-then-retrieve (1 LLM call: query into DE/FR/IT; per-language hybrid, RRF, rerank, answer) | 0.79 [0.63, 0.92] | 0.80 | 0.71 [0.57, 0.83] | 0.82 | 0.0029 | 18.3 / 24.3 | 4/5 |
+| ADK agent (planner, 3 language retrievers, citation checker, up to 3 rounds) | 0.93 [0.86, 0.98] | 0.87 | 0.68 [0.57, 0.81] | 0.79 | 0.0025 | 16.2 / 38.1 | 4/5 |
+
+Paired differences (A - B, `fedlex_bench.eval compare`):
+- translate vs single-shot: recall@10 +0.13 [+0.03, +0.24], fact recall +0.15 [+0.05, +0.25]: **claimable**. Translating the query into the three languages is the single biggest gain found so far, at +0.001 USD per query.
+- agent vs single-shot: recall@10 +0.27 [+0.12, +0.44] claimable; fact recall +0.13 [-0.03, +0.31] not claimable.
+- agent vs translate: recall@10 +0.14 [-0.01, +0.32], fact recall -0.02 [-0.21, +0.19]: **no claim**. On this benchmark the agent loop adds retrieval recall but not measurably better answers than the one-call translation control, at similar cost and 3x the latency of single-shot (p95 38 s).
+
+Failure classes of the agent (rule-based, from traces, n=63): ok 53, malformed output 4 (answerer JSON failed twice), refused answerable 4, answered trap 1, wrong-language retriever 1. Step limit hit in 14 runs, checker rejected something in 7.
+
+Sanity on "too good to be true": agent recall@10 is 0.93 overall, 1.00 for DE and FR questions (n=12, 15), 0.87 for EN and IT. It is below the 95% stop line overall, and not a leak: the agent sees only the question and the corpus. It matches Phase 1, where a blind solver agent found the gold article for 149 of 150 questions. Reading: questions drafted from an article's text are easy for an LLM searcher once it writes queries in the article's language, so recall near the ceiling is expected and this benchmark separates retrievers better than strong systems.
+
+**Chunking ablation** (hybrid, all_lang index, no answer; dev recall@10, then with Haiku rerank N=60 of 150):
+
+| Chunking | R@10 no rerank | R@10 rerank | Cost/q rerank USD |
+| --- | --- | --- | --- |
+| article | 0.46 [0.29, 0.61] | 0.66 [0.50, 0.81] | 0.0015 |
+| paragraph | 0.34 [0.20, 0.49] | 0.57 [0.41, 0.71] | 0.0008 |
+| fixed window (200 words, 50 overlap) | 0.45 [0.29, 0.60] | 0.66 [0.49, 0.80] | 0.0015 |
+
+Paragraph chunks are worse by about 9 to 12 points (CIs overlap, so not claimed) and cheaper to rerank; window equals article. Answer-level numbers for window vs article follow when the run finishes.

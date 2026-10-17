@@ -59,3 +59,31 @@ def test_config_is_json_ready():
     cfg = PipelineSystem(FakeRetriever(), answerer=RecordingAnswerer()).config()
     json.dumps(cfg)
     assert cfg["retriever"] == "fake/all_lang/article" and cfg["answerer"] == "ans"
+
+
+def test_translation_system_fuses_per_language_retrievals_and_counts_translation_cost():
+    import json
+
+    from fedlex_bench.eval.systems import TranslateRetrieveSystem
+    from fedlex_bench.llm.fake import FakeClient
+
+    class LangRetriever:
+        def __init__(self, lang, ids):
+            self.name, self.lang, self.ids = f"fake/single_lang_{lang}", lang, ids
+
+        def retrieve(self, query, query_lang, k):
+            assert query == f"q-{self.lang}"  # each language retriever gets its own translation
+            return RetrievalResult([cand(i, self.lang) for i in self.ids], Usage())
+
+    client = FakeClient([json.dumps({"de": "q-de", "fr": "q-fr", "it": "q-it"})], cost_usd=0.01)
+    s = TranslateRetrieveSystem(
+        {"de": LangRetriever("de", ["a:1", "b:2"]), "fr": LangRetriever("fr", ["b:2", "c:3"]),
+         "it": LangRetriever("it", ["b:2"])},
+        client,
+        retrieve_k=10,
+    )
+    out = s.run("question", "en")
+    assert out.ranked_article_ids[0] == "b:2"  # in all three lists: best fused rank
+    assert set(out.ranked_article_ids) == {"a:1", "b:2", "c:3"}
+    assert out.usage.cost_usd == 0.01 and out.usage.calls == 1
+    assert s.config()["kind"] == "translate_retrieve"

@@ -103,7 +103,7 @@ class PlannerAgent(BaseAgent):
         )  # fmt: skip
         text = call_llm(
             self.llm, rt, self.name,
-            LLMRequest(system=prompts.PLANNER_SYSTEM, user=user, max_output_tokens=700,
+            LLMRequest(system=prompts.PLANNER_SYSTEM, user=user, max_output_tokens=1500,
                        json_output=True),
             purpose="plan",
         )  # fmt: skip
@@ -220,7 +220,7 @@ class CitationCheckerAgent(BaseAgent):
     ) -> tuple[set[str], dict[str, str], str] | None:
         req = LLMRequest(
             system=prompts.CHECKER_SYSTEM, user=prompts.checker_user(answer, cited),
-            max_output_tokens=600, json_output=True,
+            max_output_tokens=2000, json_output=True,
         )  # fmt: skip
         for attempt in (1, 2):  # invalid output is retried once
             text = call_llm(self.llm, rt, self.name, req, purpose="check", attempt=attempt)
