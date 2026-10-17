@@ -136,4 +136,4 @@ Up to four configurations are written into `docs/phase2_progress.md` (full confi
 
 ## Amendments
 
-(none yet)
+- 2026-10-17 (before any model run): the faithfulness judge receives the cited articles in all three language versions (each capped at 6000 characters), read from the corpus by id, not only the language versions the retriever returned. Reason: the harness scores from ids, and this removes retrieval language as a confound for faithfulness.
