@@ -53,6 +53,8 @@
                  font-weight: 600; }
   .reason { font-size: 14px; background: var(--bg); border-radius: 8px; padding: 8px 10px;
             margin: 6px 0; }
+  .flagged { background: var(--no-bg); border-radius: 8px; padding: 8px; }
+  .recheck { display: block; font-size: 13px; color: var(--no); margin-top: 4px; }
   @media (max-width: 560px) { .fact { flex-direction: column; } }
 </style>
 </head>
@@ -162,7 +164,11 @@ function render() {
     } else {
       card.append(el("div", { class: "label", text: "Gold facts: is each one stated by the reply?" }));
       item.facts.forEach((f, i) => {
-        card.append(el("div", { class: "fact" }, el("p", { text: `${i}. ${f}` }),
+        const fl = item.flags && item.flags[String(i)];
+        const text = el("p", { text: `${i}. ${f}` });
+        if (fl) text.append(el("span", { class: "recheck",
+          text: ` Recheck: the judge said "${fl.judge ? "Stated" : "Not stated"}", your first pass said "${fl.you ? "Stated" : "Not stated"}".` }));
+        card.append(el("div", { class: "fact" + (fl ? " flagged" : "") }, text,
           addButtons(item, i, "Stated", "Not stated")));
       });
     }

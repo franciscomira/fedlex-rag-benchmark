@@ -11,7 +11,13 @@
    "The recognition can be challenged by the mother, by the husband, and by the husband's commune of origin or domicile.",
    "The child (or after its death its descendants) can challenge the recognition if the spouses' life together ended while the child was a minor or if the recognition took place after the child turned 12."
   ],
-  "trap_reason": null
+  "trap_reason": null,
+  "flags": {
+   "0": {
+    "judge": true,
+    "you": false
+   }
+  }
  },
  {
   "id": "v1-0008",
@@ -25,7 +31,13 @@
    "That protection of rank is subject to the reserved power of the bondholders' community to grant priority to a new pledge.",
    "Granting priority to a pledge created for new capital brought into the enterprise requires the consent of representatives of at least two thirds of the outstanding capital."
   ],
-  "trap_reason": null
+  "trap_reason": null,
+  "flags": {
+   "0": {
+    "judge": true,
+    "you": false
+   }
+  }
  },
  {
   "id": "v1-0010-de",
@@ -39,7 +51,13 @@
    "A valid reason is any circumstance that makes it unreasonable, in good faith, to expect the terminating party to continue the contract.",
    "The court may never treat the fact that the employee was prevented from working through no fault of his own as a valid reason."
   ],
-  "trap_reason": null
+  "trap_reason": null,
+  "flags": {
+   "2": {
+    "judge": true,
+    "you": false
+   }
+  }
  },
  {
   "id": "v1-0010-it",
@@ -53,7 +71,13 @@
    "A valid reason is any circumstance that makes it unreasonable, in good faith, to expect the terminating party to continue the contract.",
    "The court may never treat the fact that the employee was prevented from working through no fault of his own as a valid reason."
   ],
-  "trap_reason": null
+  "trap_reason": null,
+  "flags": {
+   "2": {
+    "judge": true,
+    "you": false
+   }
+  }
  },
  {
   "id": "v1-0011",
@@ -66,7 +90,17 @@
    "The members' liability and their obligation to make additional contributions in a cooperative can only be changed by amending the articles of association.",
    "A reduction of the liability of the members or of their obligation to make additional contributions does not affect debts that arose before the amendment of the articles was published (registered, in the Italian text)."
   ],
-  "trap_reason": null
+  "trap_reason": null,
+  "flags": {
+   "0": {
+    "judge": false,
+    "you": true
+   },
+   "1": {
+    "judge": true,
+    "you": false
+   }
+  }
  },
  {
   "id": "v1-0011-en",
@@ -79,7 +113,8 @@
    "The members' liability and their obligation to make additional contributions in a cooperative can only be changed by amending the articles of association.",
    "A reduction of the liability of the members or of their obligation to make additional contributions does not affect debts that arose before the amendment of the articles was published (registered, in the Italian text)."
   ],
-  "trap_reason": null
+  "trap_reason": null,
+  "flags": {}
  },
  {
   "id": "v1-0011-fr",
@@ -92,7 +127,13 @@
    "The members' liability and their obligation to make additional contributions in a cooperative can only be changed by amending the articles of association.",
    "A reduction of the liability of the members or of their obligation to make additional contributions does not affect debts that arose before the amendment of the articles was published (registered, in the Italian text)."
   ],
-  "trap_reason": null
+  "trap_reason": null,
+  "flags": {
+   "1": {
+    "judge": false,
+    "you": true
+   }
+  }
  },
  {
   "id": "v1-0015",
@@ -106,7 +147,8 @@
    "If the business name contains other surnames, the owner's surname must be made prominent.",
    "The business name must not contain any addition suggesting the existence of a partnership or company."
   ],
-  "trap_reason": null
+  "trap_reason": null,
+  "flags": {}
  },
  {
   "id": "v1-0017-en",
@@ -119,7 +161,8 @@
    "Board members and all persons involved in management or liquidation are liable to the company and to individual shareholders and creditors for damage caused by an intentional or negligent breach of their duties.",
    "A person who lawfully delegates a task to another body is liable for damage caused by that body unless he proves that he exercised the care required by the circumstances in selecting, instructing and supervising it."
   ],
-  "trap_reason": null
+  "trap_reason": null,
+  "flags": {}
  },
  {
   "id": "v1-0017-it",
@@ -132,7 +175,8 @@
    "Board members and all persons involved in management or liquidation are liable to the company and to individual shareholders and creditors for damage caused by an intentional or negligent breach of their duties.",
    "A person who lawfully delegates a task to another body is liable for damage caused by that body unless he proves that he exercised the care required by the circumstances in selecting, instructing and supervising it."
   ],
-  "trap_reason": null
+  "trap_reason": null,
+  "flags": {}
  },
  {
   "id": "v1-0019",
@@ -145,7 +189,13 @@
    "A company limited by shares is dissolved by a court judgment if shareholders together representing at least 10 percent of the share capital or of the votes request dissolution for good cause.",
    "In such an action, the court may order another appropriate solution acceptable to the parties instead of dissolution."
   ],
-  "trap_reason": null
+  "trap_reason": null,
+  "flags": {
+   "0": {
+    "judge": true,
+    "you": false
+   }
+  }
  },
  {
   "id": "v1-0020",
@@ -160,7 +210,17 @@
    "The supplier must inform the customer, in writing or in another form allowing proof by text, of the right of revocation, its form and time limit, and give its address.",
    "This information must be dated and allow the contract to be identified."
   ],
-  "trap_reason": null
+  "trap_reason": null,
+  "flags": {
+   "0": {
+    "judge": true,
+    "you": false
+   },
+   "3": {
+    "judge": false,
+    "you": true
+   }
+  }
  },
  {
   "id": "v1-0021-it",
@@ -173,7 +233,8 @@
    "Expenses and income must be separated from each other in time and in substance.",
    "If net proceeds from sales of goods and services or financial income do not exceed 100,000 francs, the time-based separation may be dropped and expenditure and receipts used instead."
   ],
-  "trap_reason": null
+  "trap_reason": null,
+  "flags": {}
  },
  {
   "id": "v1-0023-de",
@@ -187,7 +248,13 @@
    "If the company must prepare consolidated accounts, it must prepare a consolidated report on payments, which replaces the reports of the individual group companies.",
    "State bodies are national, regional or municipal authorities of a third country, including administrations and companies controlled by them."
   ],
-  "trap_reason": null
+  "trap_reason": null,
+  "flags": {
+   "0": {
+    "judge": true,
+    "you": false
+   }
+  }
  },
  {
   "id": "v1-0023-en",
@@ -201,7 +268,17 @@
    "If the company must prepare consolidated accounts, it must prepare a consolidated report on payments, which replaces the reports of the individual group companies.",
    "State bodies are national, regional or municipal authorities of a third country, including administrations and companies controlled by them."
   ],
-  "trap_reason": null
+  "trap_reason": null,
+  "flags": {
+   "0": {
+    "judge": true,
+    "you": false
+   },
+   "2": {
+    "judge": false,
+    "you": true
+   }
+  }
  },
  {
   "id": "v1-0024",
@@ -214,7 +291,8 @@
    "If someone manages another person's affairs not in that person's interest, the principal is still entitled to appropriate the benefits arising from the management of his affairs.",
    "The principal must reimburse and release the person who managed the affairs only to the extent that he is enriched."
   ],
-  "trap_reason": null
+  "trap_reason": null,
+  "flags": {}
  },
  {
   "id": "v1-0024-de",
@@ -227,7 +305,8 @@
    "If someone manages another person's affairs not in that person's interest, the principal is still entitled to appropriate the benefits arising from the management of his affairs.",
    "The principal must reimburse and release the person who managed the affairs only to the extent that he is enriched."
   ],
-  "trap_reason": null
+  "trap_reason": null,
+  "flags": {}
  },
  {
   "id": "v1-0024-fr",
@@ -240,7 +319,8 @@
    "If someone manages another person's affairs not in that person's interest, the principal is still entitled to appropriate the benefits arising from the management of his affairs.",
    "The principal must reimburse and release the person who managed the affairs only to the extent that he is enriched."
   ],
-  "trap_reason": null
+  "trap_reason": null,
+  "flags": {}
  },
  {
   "id": "v1-0025",
@@ -253,7 +333,13 @@
    "An agent is liable, as if they were his own, for the acts of a person to whom he improperly delegated the mandate.",
    "The principal may directly assert against the sub-agent the rights the agent has against that person."
   ],
-  "trap_reason": null
+  "trap_reason": null,
+  "flags": {
+   "1": {
+    "judge": true,
+    "you": false
+   }
+  }
  },
  {
   "id": "v1-0026",
@@ -267,7 +353,13 @@
    "If the maker refuses to confirm the sight with a date, this must be established by a protest, and the period after sight then runs from the date of the protest.",
    "Where the dated statement is missing, the holder must have the omission established in time by a protest to preserve his rights of recourse against the endorsers and the drawer."
   ],
-  "trap_reason": null
+  "trap_reason": null,
+  "flags": {
+   "1": {
+    "judge": true,
+    "you": false
+   }
+  }
  },
  {
   "id": "v1-0028",
@@ -280,7 +372,8 @@
    "A residential lease can be extended by at most four years in total.",
    "Within that maximum, one or two extensions can be granted."
   ],
-  "trap_reason": null
+  "trap_reason": null,
+  "flags": {}
  },
  {
   "id": "v1-0032",
@@ -294,7 +387,8 @@
    "The federal body may disclose sensitive personal data to private persons only in a form in which the data subjects cannot be identified, and the recipient may pass the data on only with the federal body's consent.",
    "Results may be published only in a form in which the data subjects cannot be identified."
   ],
-  "trap_reason": null
+  "trap_reason": null,
+  "flags": {}
  },
  {
   "id": "v1-0033",
@@ -308,7 +402,8 @@
    "The Federal Council sets the amount of the fees.",
    "The Federal Council may determine cases in which a fee is waived or reduced."
   ],
-  "trap_reason": null
+  "trap_reason": null,
+  "flags": {}
  },
  {
   "id": "v1-0036",
@@ -322,7 +417,8 @@
    "The parties may, by a declaration in the arbitration agreement or in a later agreement, exclude the arbitration part of the Code and agree that chapter 12 of the Federal Act on Private International Law applies.",
    "That declaration must satisfy statutory formal requirements."
   ],
-  "trap_reason": null
+  "trap_reason": null,
+  "flags": {}
  },
  {
   "id": "v1-0037",
@@ -335,7 +431,8 @@
    "If the object in dispute is transferred during the proceedings, the acquirer may take over the proceedings in place of the transferring party.",
    "The party taking over is liable for all court costs, but the withdrawing party remains jointly and severally liable for the court costs incurred up to that point."
   ],
-  "trap_reason": null
+  "trap_reason": null,
+  "flags": {}
  },
  {
   "id": "v1-0041",
@@ -345,7 +442,8 @@
   "reply": "The sources do not contain information about the tax on profits from selling property in Ticino or whether renovation expenses are deductible.",
   "gloss": "The sources do not contain information about the tax on profits from selling property in Ticino or whether renovation expenses are deductible.",
   "facts": [],
-  "trap_reason": "Tax on gains from selling real estate is governed by federal tax harmonisation law and cantonal tax laws, none of which is among the eight acts, although their rules on sale of land and property look related."
+  "trap_reason": "Tax on gains from selling real estate is governed by federal tax harmonisation law and cantonal tax laws, none of which is among the eight acts, although their rules on sale of land and property look related.",
+  "flags": {}
  },
  {
   "id": "v1-0042",
@@ -355,7 +453,8 @@
   "reply": "Die Voraussetzungen und die zuständige Behörde für eine vorzeitige Mündigerklärung sind in den Quellen nicht enthalten.",
   "gloss": "The prerequisites and the competent authority for a premature declaration of majority are not contained in the sources.",
   "facts": [],
-  "trap_reason": "The Civil Code provision on early declaration of majority was repealed with effect from 1 January 1996, so no in-force article states its conditions or the deciding authority."
+  "trap_reason": "The Civil Code provision on early declaration of majority was repealed with effect from 1 January 1996, so no in-force article states its conditions or the deciding authority.",
+  "flags": {}
  },
  {
   "id": "v1-0043",
@@ -365,7 +464,8 @@
   "reply": "La réponse à cette question ne se trouve pas dans les sources.",
   "gloss": "The answer to this question cannot be found in the sources.",
   "facts": [],
-  "trap_reason": "The reference interest rate and the percentage rent change per step are set by the federal tenancy ordinance and published by the Federal Office for Housing, not by the Code of Obligations."
+  "trap_reason": "The reference interest rate and the percentage rent change per step are set by the federal tenancy ordinance and published by the Federal Office for Housing, not by the Code of Obligations.",
+  "flags": {}
  },
  {
   "id": "v1-0044",
@@ -375,7 +475,8 @@
   "reply": "Le montant habituellement accordé par les tribunaux aux parents n’est pas indiqué dans les sources.",
   "gloss": "The amount usually awarded by the courts to parents is not indicated in the sources.",
   "facts": [],
-  "trap_reason": "The Code of Obligations only allows the court to award an appropriate sum as satisfaction; the usual amounts come from Federal Supreme Court case law."
+  "trap_reason": "The Code of Obligations only allows the court to award an appropriate sum as satisfaction; the usual amounts come from Federal Supreme Court case law.",
+  "flags": {}
  },
  {
   "id": "v1-0045",
@@ -385,6 +486,7 @@
   "reply": "The sources do not state what information an issue prospectus must contain.",
   "gloss": "The sources do not state what information an issue prospectus must contain.",
   "facts": [],
-  "trap_reason": "The Code of Obligations' rules on the share issue prospectus were repealed with effect from 1 January 2020 and replaced by the Financial Services Act."
+  "trap_reason": "The Code of Obligations' rules on the share issue prospectus were repealed with effect from 1 January 2020 and replaced by the Financial Services Act.",
+  "flags": {}
  }
 ]

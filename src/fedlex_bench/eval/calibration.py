@@ -174,10 +174,10 @@ def cmd_agree(args: argparse.Namespace) -> None:
     from fedlex_bench.llm import build_client
 
     items = {i["id"]: i for i in load_items(BENCH / "dev.jsonl")}
-    labels = json.loads((CALIB_DIR / "labels.json").read_text(encoding="utf-8"))
+    labels = json.loads((CALIB_DIR / args.labels).read_text(encoding="utf-8"))
     meta = json.loads((CALIB_DIR / "sample.json").read_text(encoding="utf-8"))
     reports: dict[str, Any] = {}
-    for model in (DEFAULT_JUDGE, GPT_ANSWERER_JUDGE):
+    for model in args.judges or (DEFAULT_JUDGE, GPT_ANSWERER_JUDGE):
         judge = Judge(build_client(model))
         human: dict[str, Any] = {}
         judge_out: dict[str, Any] = {}
@@ -202,9 +202,14 @@ def cmd_agree(args: argparse.Namespace) -> None:
         report = agreement({i: judge_out[i] for i in usable}, {i: human[i] for i in usable})
         report["n_items_labelled"] = len(human)
         report["n_items_scored"] = len(usable)
+        report["judge_facts"] = {i: judge_out[i] for i in usable if isinstance(human[i], list)}
         reports[model] = report
-    (CALIB_DIR / "agreement.json").write_text(json.dumps(reports, indent=1), encoding="utf-8")
-    print(json.dumps(reports, indent=1))
+    out = CALIB_DIR / (args.out or "agreement.json")
+    out.write_text(json.dumps(reports, indent=1), encoding="utf-8")
+    for model, r in reports.items():
+        f = r["facts"]
+        print(f"{model:24s} facts {f['agree']}/{f['n']} = {f['raw']:.2f} kappa {f['kappa']:.2f} | "
+              f"traps {r['traps']['agree']}/{r['traps']['n']} | overall {r['overall_raw']:.2f}")
 
 
 def validate_labels(new: Mapping[str, Any], template: Mapping[str, Any]) -> None:
@@ -277,6 +282,23 @@ def cmd_label(args: argparse.Namespace) -> None:
     server.serve_forever()
 
 
+def cmd_flag(args: argparse.Namespace) -> None:
+    """Mark the facts where a judge and the first-pass labels disagree, for a recheck pass."""
+    report = json.loads((CALIB_DIR / "agreement_first_pass.json").read_text(encoding="utf-8"))
+    first = json.loads((CALIB_DIR / "labels_first_pass.json").read_text(encoding="utf-8"))
+    judge_facts = report[args.judge]["judge_facts"]
+    cards = json.loads((CALIB_DIR / "items.json").read_text(encoding="utf-8"))
+    n = 0
+    for card in cards:
+        card["flags"] = {}
+        for i, (j, h) in enumerate(zip(judge_facts.get(card["id"], []), first[card["id"]].get("facts", []), strict=False)):
+            if j != h:
+                card["flags"][str(i)] = {"judge": j, "you": h}
+                n += 1
+    (CALIB_DIR / "items.json").write_text(json.dumps(cards, indent=1, ensure_ascii=False), encoding="utf-8")
+    print(f"{n} facts flagged for recheck")
+
+
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser()
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -284,10 +306,16 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("runs", nargs="+")
     s.add_argument("--gloss-model", default="gemini-3.5-flash-lite")
     s.set_defaults(fn=cmd_sample)
+    fl = sub.add_parser("flag")
+    fl.add_argument("--judge", default="gpt-6-luna")
+    fl.set_defaults(fn=cmd_flag)
     lb = sub.add_parser("label")
     lb.add_argument("--port", type=int, default=8765)
     lb.set_defaults(fn=cmd_label)
     a = sub.add_parser("agree")
+    a.add_argument("--judges", nargs="+", help="judge model refs (default: the two small ones)")
+    a.add_argument("--labels", default="labels.json")
+    a.add_argument("--out")
     a.set_defaults(fn=cmd_agree)
     args = p.parse_args(argv)
     args.fn(args)

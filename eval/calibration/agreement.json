@@ -1,0 +1,34 @@
+{
+ "gpt-6-luna": {
+  "facts": {
+   "n": 63,
+   "agree": 48,
+   "raw": 0.7619047619047619,
+   "kappa": 0.5220030349013657
+  },
+  "traps": {
+   "n": 5,
+   "agree": 5,
+   "raw": 1.0
+  },
+  "overall_raw": 0.7794117647058824,
+  "n_items_labelled": 30,
+  "n_items_scored": 30
+ },
+ "gemini-3.5-flash-lite": {
+  "facts": {
+   "n": 63,
+   "agree": 44,
+   "raw": 0.6984126984126984,
+   "kappa": 0.4291845493562231
+  },
+  "traps": {
+   "n": 5,
+   "agree": 5,
+   "raw": 1.0
+  },
+  "overall_raw": 0.7205882352941176,
+  "n_items_labelled": 30,
+  "n_items_scored": 30
+ }
+}
