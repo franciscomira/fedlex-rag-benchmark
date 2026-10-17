@@ -1,6 +1,6 @@
 # Phase 1 report: the benchmark
 
-Date: 2026-10-17. Frozen as `benchmark/v1/` (git tag `benchmark-v1`, local, not pushed). Spec: [benchmark_spec.md](benchmark_spec.md). Progress log with the decisions in order: [phase1_progress.md](phase1_progress.md).
+Date: 2026-10-16. Frozen as `benchmark/v1/` (git tag `benchmark-v1`, local, not pushed). Spec: [benchmark_spec.md](benchmark_spec.md). Progress log with the decisions in order: [phase1_progress.md](phase1_progress.md).
 
 ## Summary
 
