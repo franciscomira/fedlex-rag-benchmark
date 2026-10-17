@@ -48,3 +48,27 @@ All three providers answered a smoke call. Reranker = listwise, one call per que
 Checked because three models gave the same R@1/R@10: not a bug. In 37 of 58 answerable items the gold article is inside the first 30 chunks, and all three models put it first every time; the top-5 lists differ between models. So recall is capped by first-stage recall, not by the reranker, and the models cannot be told apart here. Two honest readings: (1) the first stage is the bottleneck, so widening N helps (0.60 to 0.69, but the intervals overlap, so that is not yet a claim); (2) the questions were drafted from the gold article text, so an LLM finds the matching article trivially once it is a candidate. That makes this benchmark good at separating retrievers and weak at separating strong rerankers; the Phase 3 question (can a small fine-tuned reranker match a frontier LLM) will likely show a ceiling effect. Haiku at 0.0008 USD/query is as good as Sonnet at 0.0165 here (20x cheaper).
 
 Open: `gpt-6-luna` reranker not run, the OpenAI key returned 401 after .env was edited. Spend so far about 2 USD of 25.
+
+### 2026-10-17: LLM reranker across methods and index configs; single-shot answering (dev, live)
+
+**Retrieval + Haiku reranker (retrieve 150, rerank first 60 chunks), recall@10, before -> after rerank.** n=63 (46 for same_lang). Runs `dev_rr_<method>_<config>_haiku_rk60`.
+
+| Method | same_lang | single de | single fr | single it | all_lang |
+| --- | --- | --- | --- | --- | --- |
+| bm25 | 0.45 -> 0.60 | 0.07 -> 0.19 | 0.13 -> 0.20 | 0.17 -> 0.25 | 0.36 -> 0.45 |
+| embedding | 0.44 -> 0.64 | 0.30 -> 0.48 | 0.24 -> 0.41 | 0.27 -> 0.56 | 0.40 -> 0.59 |
+| hybrid | 0.52 -> 0.71 | 0.20 -> 0.46 | 0.22 -> 0.44 | 0.31 -> 0.58 | 0.46 -> 0.66 |
+
+The reranker lifts every cell by 8 to 26 points. The reranker's gain is largest where first-stage recall is weakest; hybrid is the best first stage everywhere. Individual cells have wide CIs (about +-15 points), so claim the pattern (rerank > no rerank everywhere; hybrid >= embedding >= BM25 on cross-lingual indexes), not single-cell differences.
+
+**Single-shot answering, same retrieved context for all three (hybrid/all_lang, Haiku rerank N=60, top 5 articles).** n=58 answerable dev items + 5 traps. Judge for Claude and Gemini answers: gpt-6-luna; for GPT answers: gemini-3.5-flash-lite (so the GPT row is judged by a different judge than the other two: not directly comparable until the self-preference check is done).
+
+| Answerer | Fact recall | Faithfulness | Cit precision | Cit recall | Cost/q USD | p50 s | Traps |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| claude-haiku-5-5 | 0.55 [0.43, 0.69] | 0.77 [0.71, 0.83] | 0.40 | 0.66 | 0.0021 | 5.9 | 5/5 |
+| gpt-6-luna | 0.64 [0.51, 0.77] | 0.89 [0.83, 0.95] | 0.55 | 0.66 | 0.0018 | 4.6 | 5/5 |
+| gemini-3.5-flash-lite | 0.50 [0.39, 0.63] | 0.79 [0.70, 0.88] | 0.65 | 0.66 | 0.0025 | 2.5 | 5/5 |
+
+Conditional on the gold article being in the 5 articles shown (40 of 58 items): fact recall 0.78 (Claude), 0.90 (GPT), 0.71 (Gemini), and zero refusals. When it is not shown (18 items): fact recall about 0.05 and refusals 44% / 61% / 89%. So most of the fact-recall gap to 1.0 is retrieval, and refusing when the answer is missing is the right behaviour; the "over-refusal rate" must always be read together with context recall. Differences between answerers are inside the CIs (and confounded by the judge change for GPT); no ranking claimed. Citation precision is low because the models cite every article they used, often 2 or 3 for a one-article gold. Trap accuracy 5/5 everywhere says nothing (n=5). Cost of every row is under 0.003 USD per query.
+
+Calibration sheet for the user drawn from these three runs: `eval/calibration/sheet.md` (30 answers, blind), labels go in `eval/calibration/labels.json`; then `python -m fedlex_bench.eval.calibration agree`.

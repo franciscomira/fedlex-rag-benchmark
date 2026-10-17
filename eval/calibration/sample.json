@@ -1,0 +1,152 @@
+[
+ {
+  "id": "v1-0001",
+  "run": "dev_ans_gemini-3.5-flash-lite",
+  "kind": "normal"
+ },
+ {
+  "id": "v1-0008",
+  "run": "dev_ans_claude-haiku-5-5",
+  "kind": "normal"
+ },
+ {
+  "id": "v1-0010-de",
+  "run": "dev_ans_gemini-3.5-flash-lite",
+  "kind": "normal"
+ },
+ {
+  "id": "v1-0010-it",
+  "run": "dev_ans_claude-haiku-5-5",
+  "kind": "normal"
+ },
+ {
+  "id": "v1-0011",
+  "run": "dev_ans_gemini-3.5-flash-lite",
+  "kind": "normal"
+ },
+ {
+  "id": "v1-0011-en",
+  "run": "dev_ans_gemini-3.5-flash-lite",
+  "kind": "edge"
+ },
+ {
+  "id": "v1-0011-fr",
+  "run": "dev_ans_claude-haiku-5-5",
+  "kind": "normal"
+ },
+ {
+  "id": "v1-0015",
+  "run": "dev_ans_claude-haiku-5-5",
+  "kind": "normal"
+ },
+ {
+  "id": "v1-0017-en",
+  "run": "dev_ans_gpt-6-luna",
+  "kind": "normal"
+ },
+ {
+  "id": "v1-0017-it",
+  "run": "dev_ans_gemini-3.5-flash-lite",
+  "kind": "normal"
+ },
+ {
+  "id": "v1-0019",
+  "run": "dev_ans_gpt-6-luna",
+  "kind": "normal"
+ },
+ {
+  "id": "v1-0020",
+  "run": "dev_ans_gpt-6-luna",
+  "kind": "normal"
+ },
+ {
+  "id": "v1-0021-it",
+  "run": "dev_ans_gemini-3.5-flash-lite",
+  "kind": "normal"
+ },
+ {
+  "id": "v1-0023-de",
+  "run": "dev_ans_gemini-3.5-flash-lite",
+  "kind": "normal"
+ },
+ {
+  "id": "v1-0023-en",
+  "run": "dev_ans_gpt-6-luna",
+  "kind": "normal"
+ },
+ {
+  "id": "v1-0024",
+  "run": "dev_ans_gpt-6-luna",
+  "kind": "edge"
+ },
+ {
+  "id": "v1-0024-de",
+  "run": "dev_ans_gemini-3.5-flash-lite",
+  "kind": "edge"
+ },
+ {
+  "id": "v1-0024-fr",
+  "run": "dev_ans_claude-haiku-5-5",
+  "kind": "edge"
+ },
+ {
+  "id": "v1-0025",
+  "run": "dev_ans_claude-haiku-5-5",
+  "kind": "normal"
+ },
+ {
+  "id": "v1-0026",
+  "run": "dev_ans_gemini-3.5-flash-lite",
+  "kind": "normal"
+ },
+ {
+  "id": "v1-0028",
+  "run": "dev_ans_gemini-3.5-flash-lite",
+  "kind": "edge"
+ },
+ {
+  "id": "v1-0032",
+  "run": "dev_ans_claude-haiku-5-5",
+  "kind": "normal"
+ },
+ {
+  "id": "v1-0033",
+  "run": "dev_ans_gemini-3.5-flash-lite",
+  "kind": "normal"
+ },
+ {
+  "id": "v1-0036",
+  "run": "dev_ans_gemini-3.5-flash-lite",
+  "kind": "normal"
+ },
+ {
+  "id": "v1-0037",
+  "run": "dev_ans_gemini-3.5-flash-lite",
+  "kind": "normal"
+ },
+ {
+  "id": "v1-0041",
+  "run": "dev_ans_gpt-6-luna",
+  "kind": "trap"
+ },
+ {
+  "id": "v1-0042",
+  "run": "dev_ans_gpt-6-luna",
+  "kind": "trap"
+ },
+ {
+  "id": "v1-0043",
+  "run": "dev_ans_gemini-3.5-flash-lite",
+  "kind": "trap"
+ },
+ {
+  "id": "v1-0044",
+  "run": "dev_ans_gpt-6-luna",
+  "kind": "trap"
+ },
+ {
+  "id": "v1-0045",
+  "run": "dev_ans_gpt-6-luna",
+  "kind": "trap"
+ }
+]

@@ -1,0 +1,22 @@
+{
+  "config_hash": "cc3b9086ce",
+  "git_sha": "47910f53f9553713c33a0f9c7f696ad1a185749d",
+  "judge_model": "none",
+  "n_items": 46,
+  "prompt_hashes": {
+    "facts": "6e9e3aef21b9822e",
+    "faithfulness": "3d9d759fbd9f518d",
+    "trap": "819a324b09beae39"
+  },
+  "run_id": "dev_rr_hybrid_same_lang_haiku_rk60",
+  "split": "dev",
+  "system": {
+    "answer_articles": 5,
+    "answerer": null,
+    "kind": "pipeline",
+    "rerank_k": 60,
+    "reranker": "llm_rerank/claude-haiku-5-5",
+    "retrieve_k": 150,
+    "retriever": "hybrid/same_lang/article"
+  }
+}

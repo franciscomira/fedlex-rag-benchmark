@@ -1,0 +1,180 @@
+{
+ "v1-0001": {
+  "facts": [
+   null,
+   null,
+   null
+  ]
+ },
+ "v1-0008": {
+  "facts": [
+   null,
+   null,
+   null
+  ]
+ },
+ "v1-0010-de": {
+  "facts": [
+   null,
+   null,
+   null
+  ]
+ },
+ "v1-0010-it": {
+  "facts": [
+   null,
+   null,
+   null
+  ]
+ },
+ "v1-0011": {
+  "facts": [
+   null,
+   null
+  ]
+ },
+ "v1-0011-en": {
+  "facts": [
+   null,
+   null
+  ]
+ },
+ "v1-0011-fr": {
+  "facts": [
+   null,
+   null
+  ]
+ },
+ "v1-0015": {
+  "facts": [
+   null,
+   null,
+   null
+  ]
+ },
+ "v1-0017-en": {
+  "facts": [
+   null,
+   null
+  ]
+ },
+ "v1-0017-it": {
+  "facts": [
+   null,
+   null
+  ]
+ },
+ "v1-0019": {
+  "facts": [
+   null,
+   null
+  ]
+ },
+ "v1-0020": {
+  "facts": [
+   null,
+   null,
+   null,
+   null
+  ]
+ },
+ "v1-0021-it": {
+  "facts": [
+   null,
+   null
+  ]
+ },
+ "v1-0023-de": {
+  "facts": [
+   null,
+   null,
+   null
+  ]
+ },
+ "v1-0023-en": {
+  "facts": [
+   null,
+   null,
+   null
+  ]
+ },
+ "v1-0024": {
+  "facts": [
+   null,
+   null
+  ]
+ },
+ "v1-0024-de": {
+  "facts": [
+   null,
+   null
+  ]
+ },
+ "v1-0024-fr": {
+  "facts": [
+   null,
+   null
+  ]
+ },
+ "v1-0025": {
+  "facts": [
+   null,
+   null
+  ]
+ },
+ "v1-0026": {
+  "facts": [
+   null,
+   null,
+   null
+  ]
+ },
+ "v1-0028": {
+  "facts": [
+   null,
+   null
+  ]
+ },
+ "v1-0032": {
+  "facts": [
+   null,
+   null,
+   null
+  ]
+ },
+ "v1-0033": {
+  "facts": [
+   null,
+   null,
+   null
+  ]
+ },
+ "v1-0036": {
+  "facts": [
+   null,
+   null,
+   null
+  ]
+ },
+ "v1-0037": {
+  "facts": [
+   null,
+   null
+  ]
+ },
+ "v1-0041": {
+  "asserts_answer": null
+ },
+ "v1-0042": {
+  "asserts_answer": null
+ },
+ "v1-0043": {
+  "asserts_answer": null
+ },
+ "v1-0044": {
+  "asserts_answer": null
+ },
+ "v1-0045": {
+  "asserts_answer": null
+ }
+}
