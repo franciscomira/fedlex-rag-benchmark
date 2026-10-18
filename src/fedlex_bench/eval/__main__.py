@@ -53,7 +53,6 @@ def _build_agent(args, env, answerer):
         answerer,
         build_client(args.agent),
         max_rounds=args.max_rounds,
-        trace_dir=RESULTS / (args.run_id or "agent_traces") / "traces" if args.run_id else None,
         store=ParquetArticleStore(PARQUET),
     )
 
@@ -175,6 +174,10 @@ def cmd_run(args: argparse.Namespace) -> None:
             raise TestRunRefused(f"{run_id} already exists; test results are never overwritten")
         log_test_start(TEST_LOG, run_id=run_id, config_hash=chash, date=today)
         print(f"test run of frozen configuration {name} ({chash})")
+    if args.agent:  # traces go next to the run's results, for dev and test alike
+        from fedlex_bench.agent.trace import TraceWriter
+
+        system.writer = TraceWriter(RESULTS / run_id / "traces" / "traces.jsonl")
     judge = Judge(judge_client) if judge_client else Judge(_NoJudge())
     out = run_eval(system, items, judge, RESULTS, run_id=run_id, split=args.split,
                    texts=article_text_lookup(PARQUET), git_sha=git_sha,
