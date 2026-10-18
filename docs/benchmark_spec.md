@@ -158,9 +158,9 @@ A trap must be one a retrieval system could wrongly "answer" with a plausible ar
 - **Answer correctness:** for each gold fact an LLM judge returns supported or not supported by the system answer. Score is fact recall. The judge model and prompt are pinned in the repo, run at temperature 0, and checked against 30 facts I label by hand; the agreement rate is reported with the results.
 - **Citations:** ids cited by the system are copied by code from the retrieved context, never generated. Precision and recall against `gold_article_ids` are computed by code.
 - **Faithfulness:** the judge checks each claim of the answer against the text of the article the system cited.
-- **Traps:** correct if the system says the sources do not answer it and does not present an article as answering it. Open point from the pilot: a good refusal may cite a pointer article (for example 281.1:16, which says the Federal Council sets the fee tariff), and a strict "any citation fails" rule would punish it. The critic records the closest article for each trap in `critic_notes`; the exact rule is decided in Phase 2 before any test number is produced.
+- **Traps:** correct if the system says the sources do not answer it and does not present an article as answering it. Open point from the pilot: a good refusal may cite a pointer article (for example 281.1:16, which says the Federal Council sets the fee tariff), and a strict "any citation fails" rule would punish it. The critic records the closest article for each trap in `critic_notes`; the exact rule was decided in Phase 2 before any test number was produced: see [eval_spec.md](eval_spec.md) section 4 (refused, no citations, no invalid ids, and the judge finds no specific answer asserted; pointers are allowed).
 
-No scorer is written in Phase 1.
+No scorer is written in Phase 1. (The scorer and its final definitions are in [eval_spec.md](eval_spec.md); where they differ from this section, that file wins.)
 
 ## 9. Parallel translated subset (decision for you)
 

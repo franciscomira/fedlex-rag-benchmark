@@ -44,16 +44,26 @@ What it demonstrates to a hiring manager: eval discipline, model-behaviour under
 
 Six phases over about 14 weeks at 8–10 h/week; each phase ends with something public.
 
-| Phase | Weeks | Output |
-| --- | --- | --- |
-| 0 · Scope and data | 1–2 | Corpus slice in DE/FR/IT, articles aligned and chunked, public repo created |
-| 1 · Benchmark | 3–4 | ~150 hand-checked questions with gold answer + source article, not-in-corpus traps |
-| 2 · Baseline harness | 5–6 | Hybrid retrieval + LLM rerank; Claude, GPT, Gemini compared on recall, faithfulness, cost |
-| 3 · Fine-tuning | 7–10 | Small multilingual reranker; base vs. tuned vs. LLM; quality vs. cost per query |
-| 4 · Ship | 11–12 | Live demo + MCP server, results page, one-command reproduction |
-| 5 · Write-up and apply | 13–14 | Long-form post + LinkedIn, CV updated, applications start |
+| Phase | Weeks | Output | State |
+| --- | --- | --- | --- |
+| 0 · Scope and data | 1–2 | Corpus slice in DE/FR/IT, articles aligned and chunked, public repo created | done |
+| 1 · Benchmark | 3–4 | ~150 hand-checked questions with gold answer + source article, not-in-corpus traps | done (frozen v1, review coverage lower than planned: see phase 1 report) |
+| 2 · Baseline harness | 5–6 | Hybrid retrieval + LLM rerank; Claude, GPT, Gemini compared on recall, faithfulness, cost | done (plus a translation control and an ADK agent; see phase 2 report) |
+| 3 · Fine-tuning | 7–10 | Small multilingual reranker; base vs. tuned vs. LLM; quality vs. cost per query | next |
+| 4 · Ship | 11–12 | Live demo + MCP server, results page, one-command reproduction | planned |
+| 5 · Write-up and apply | 13–14 | Long-form post + LinkedIn, CV updated, applications start | planned |
 
 Phase 3 is the core experiment and the fine-tuning learning block, so it gets the most time (4 weeks).
+
+## Progress and what it changes (updated 2026-10-18, after phase 2)
+
+Phases 0 to 2 are done; each has a report in `docs/`. Findings that shape the rest of the plan:
+
+- **The benchmark has a ceiling for strong rerankers.** Questions were drafted from the article text, so once the gold article is among the candidates, small and large LLM rerankers all put it first (dev: Haiku, Gemini Flash-Lite, Sonnet identical). Phase 3 compares a tuned small reranker with an LLM reranker on this ceiling; expect the two to be hard to tell apart on answerable questions, and report that honestly. Consider adding harder evaluation material (more candidates per query, or hard negatives mined from the neighbouring articles) rather than only more of the same questions.
+- **First-stage recall is the bottleneck**, mostly for English questions (14% recall@10 for bare hybrid retrieval, 71% after LLM query translation). A fine-tuned embedding model for the first stage may matter more than the reranker; decide in phase 3 which of the two to tune, or both, using the dev numbers.
+- **Train/eval separation:** exclude `benchmark/v1/dev_gold_articles.txt`, `test_gold_articles.txt` and their neighbouring articles from all fine-tuning pairs.
+- **Costs observed:** about 0.002 to 0.003 USD per question for a Haiku-based pipeline; judging costs about twice the system itself. Phase 2 spent about 11 USD of the 25 USD monthly cap.
+- **Open from phase 2:** one non-expert, English-only labeller calibrated the judge (81% agreement); no Swiss-law expert has reviewed any benchmark item. An expert or student spot check remains the largest unaddressed validity risk.
 
 ## Phase 0: access check and tasks
 
@@ -75,12 +85,12 @@ No prior work found covers our exact combination: **article-level, cited answers
 
 ### Tasks
 
-- [ ] Download the Hugging Face law dataset; check that articles align one-to-one across DE/FR/IT for 3 sample acts
-- [ ] Pick the corpus slice: Code of Obligations plus 3–5 related acts (target a few thousand articles)
-- [ ] Confirm licensing for each source (Fedlex terms, CC0, SwiLTra licence) and note it in the README
-- [ ] Read the SCALE IR section and the JuRAG post; list what they measured and what they did not
-- [ ] Create the public GitHub repo with README skeleton, licence and project structure
-- [ ] Write the chunking script: one chunk per article, with SR number and article id as metadata
+- [x] Download the Hugging Face law dataset; check that articles align one-to-one across DE/FR/IT for 3 sample acts (checked: that dataset holds court decisions only, so the corpus comes from our own Akoma Ntoso ingest)
+- [x] Pick the corpus slice: Code of Obligations plus 3–5 related acts (target a few thousand articles)
+- [x] Confirm licensing for each source (Fedlex terms, CC0, SwiLTra licence) and note it in the README
+- [x] Read the SCALE IR section and the JuRAG post; list what they measured and what they did not
+- [x] Create the public GitHub repo with README skeleton, licence and project structure
+- [x] Write the chunking script: one chunk per article, with SR number and article id as metadata
 
 ## Open questions and risks
 
@@ -93,5 +103,5 @@ No prior work found covers our exact combination: **article-level, cited answers
 | Scope creep into a product | The benchmark and write-up are the deliverable; the demo stays small |
 
 - [ ] Confirm weekly hours (8–10 assumed)
-- [ ] Set a monthly API and hosting budget
+- [x] Set a monthly API and hosting budget (25 USD per month, enforced in `config.toml`)
 - [ ] Decide on a target date to start applying

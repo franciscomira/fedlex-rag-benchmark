@@ -45,7 +45,7 @@ Read on 2026-10-15 from the arXiv HTML version of SCALE and the ZHAW blog post. 
 | Query | Case facts | 26 lawyer questions | About 150 questions, each answerable from one article |
 | Output scored | Retrieved citations | Retrieved passages | Retrieved articles and cited answers |
 | Citation faithfulness and refusal | No | No | Yes |
-| Rerankers | No cross-encoders | Reranking as a stage | Fine-tuned small reranker against an LLM reranker |
+| Rerankers | No cross-encoders | Reranking as a stage | LLM rerankers measured in phase 2; fine-tuned small reranker against an LLM reranker in phase 3 (not yet done) |
 | Frontier LLMs head to head | No | No | Claude, GPT, Gemini |
 | Cost per query | No | No | Yes |
 

@@ -24,6 +24,12 @@ Can a small fine-tuned multilingual reranker match a frontier LLM reranker on cr
 - Act id = SR number (e.g. "220" for the Code of Obligations).
 - Article id = "<SR>:<article number>" (e.g. "220:257d"). Same id across languages; that is the alignment key.
 
+## Evaluation rules (Phase 2 onward)
+- Specs: docs/eval_spec.md (metrics, judge, statistics, run layout) and eval/README.md (commands, test-split rules). Results: docs/phase2_report.md.
+- benchmark/v1 is read-only. Dev is for choices; test.jsonl runs once per frozen configuration (`eval freeze`, then `eval run --split test`); never tune on it.
+- One judge (gpt-6.1-sol) scores all answerers; cross-model comparisons never mix judges. Paid runs respect config.toml (25 USD per month, confirm above 5 USD); keys live in .env only.
+- Report intervals (95% group bootstrap) with every number and say which differences are not claimable.
+
 ## Multi-agent conventions
 - Subagent roles live in .claude/agents/. Use them for independent work; one owner per file.
 - Reviewer agents never edit code; they report findings.

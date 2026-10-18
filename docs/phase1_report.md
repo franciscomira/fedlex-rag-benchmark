@@ -1,6 +1,6 @@
 # Phase 1 report: the benchmark
 
-Date: 2026-10-16. Frozen as `benchmark/v1/` (git tag `benchmark-v1`, local, not pushed). Spec: [benchmark_spec.md](benchmark_spec.md). Progress log with the decisions in order: [phase1_progress.md](phase1_progress.md).
+Date: 2026-10-16. Frozen as `benchmark/v1/` (git tag `benchmark-v1`, pushed to origin). Spec: [benchmark_spec.md](benchmark_spec.md). Progress log with the decisions in order: [phase1_progress.md](phase1_progress.md).
 
 ## Summary
 
@@ -125,6 +125,6 @@ Drafts, critic and judge verdicts, assembled candidates and revisions are commit
 
 ## Next
 
-- Phase 2 baseline harness: decide the trap citation rule first; do not use `test.jsonl` or the test gold list for tuning.
-- Optional: cross-family judge pass and a student spot check of the item ids flagged as unsure by the checkers; if any item changes, make a v2, never edit v1.
+- Phase 2 baseline harness: done (the trap citation rule was decided in [eval_spec.md](eval_spec.md) section 4; results in [phase2_report.md](phase2_report.md)). Never use `test.jsonl` or the test gold list for tuning.
+- Cross-family judge pass: done in Phase 2 (Gemini 3.6 Flash approved all 242 items, weak evidence; see phase2_report.md). Still optional: a student spot check of the item ids flagged as unsure by the checkers; if any item changes, make a v2, never edit v1.
 - Phase 3: exclude `dev_gold_articles.txt` and `test_gold_articles.txt`, and articles adjacent to them, from fine-tuning pairs.
