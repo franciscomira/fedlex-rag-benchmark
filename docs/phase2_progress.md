@@ -168,3 +168,7 @@ Hypotheses stated now: D > C > B on recall@10 and fact recall; the C vs B gap is
 ### 2026-10-18: freeze recorded in `eval/frozen_configs.json` (before any test number)
 
 Hashes (system config, judge, prompts, benchmark checksum, corpus, prices, model registry): A 78df4b6f59, B be2a67022b, C 89c5213cec, D 89a1a1a0ad. Dev results with the fixed harness (`dev_final_A` to `dev_final_D`, judge gpt-6.1-sol, 0 judge failures, 0 parse failures): recall@10 A 0.46, B 0.66, C 0.79, D 0.97; fact recall B 0.56, C 0.66, D 0.72; over-refusal B 0.14, C 0.09, D 0.07. Spend so far 6.73 USD of 25; the four test runs are estimated at about 5 USD.
+
+### 2026-10-18: test runs and report
+
+Four frozen configurations run once each on test (`eval/test_runs.log`; D was stopped on purpose and restarted once before producing any number). Independent review of the report found 4 wrong numbers (fixed) and 8 overclaims (fixed or qualified). Sensitivity judge gpt-6-luna re-scored the stored test answers: same conclusions. Result and limitations: `docs/phase2_report.md`. Total spend about 11 USD of 25. Phase 2 is done; next is Phase 3 (fine-tuned reranker), where the dev/test gold article lists must be excluded from training pairs.
