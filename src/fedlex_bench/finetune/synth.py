@@ -47,6 +47,26 @@ SEED = 20261028
 LANGS = ("de", "fr", "it")
 LANG_NAMES = {"en": "English", "de": "German", "fr": "French", "it": "Italian"}
 STYLES = ("keywords", "short_question", "legal_wording", "lay_situation", "third_party", "confused")
+PERSONAS = (
+    "an employee",
+    "a tenant",
+    "a landlord",
+    "a parent",
+    "a freelancer",
+    "the heir of a relative",
+    "a board member of an association",
+    "a shareholder",
+    "a customer",
+    "a seller of a used car",
+    "a farmer",
+    "a student",
+    "a retired person",
+    "a startup founder",
+    "a guarantor",
+    "a creditor",
+    "a craftsperson who was not paid",
+    "a neighbour in a shared building",
+)
 STYLE_HINT = {  # repeated next to each slot so the model cannot drift to its default style
     "keywords": "2 to 8 words, search-engine style",
     "short_question": "one direct neutral question, at most 20 words",
@@ -204,8 +224,17 @@ def generate_one(client, plan: ArticlePlan, title: str, text: str) -> dict:
     return {"rows": [], "failed": reason, "cost": cost, "attempts": 2}
 
 
+def _select(args) -> list[str]:
+    """The sorted pool; with --limit N, N articles spread evenly over it, not the first N."""
+    ids = read_pool()
+    if args.limit:
+        step = max(len(ids) // args.limit, 1)
+        ids = ids[::step][: args.limit]
+    return ids
+
+
 def cmd_estimate(args) -> None:
-    ids = read_pool()[: args.limit] if args.limit else read_pool()
+    ids = _select(args)
     texts = load_pool_texts(ids)
     client = build_client(MODEL, transport=_OfflineTransport())
     proj = client.project([r for _, r in _requests(ids, texts)], EXPECTED_OUTPUT_TOKENS)
@@ -230,7 +259,7 @@ class _OfflineTransport:
 def cmd_run(args) -> None:
     if not args.yes:
         raise SystemExit("paid calls: run `estimate` first, then repeat with --yes")
-    ids = read_pool()[: args.limit] if args.limit else read_pool()
+    ids = _select(args)
     texts = load_pool_texts(ids)
     client = build_client(MODEL)
     proj = client.project([r for _, r in _requests(ids, texts)], EXPECTED_OUTPUT_TOKENS)
