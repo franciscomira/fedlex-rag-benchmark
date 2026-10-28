@@ -59,3 +59,20 @@ Settings chosen by Francisco: learning rate 2e-5, 3 epochs, batch 64, scale 20, 
 - Validation loss fell at every epoch and ended 0.03 above the training loss; there is no sign of overfitting yet. Most of the gain came in the first epoch (English R@10 0.67 to 0.92, R@1 0.40 to 0.67); epochs 2 and 3 add 1.3 points of overall R@10 together, about the width of the interval of 1,296 questions (roughly 1.4 points), so they are not distinguishable from noise. No forgetting is visible on the synthetic validation: German, French and Italian improved too.
 - **Stop-rule flag.** English recall@10 is above 90% (0.927) with no LLM. This is on the synthetic validation, drawn from the same generator as the training questions, and the base model already scored 0.67 there; it is not a dev or test number, and the dev baseline of the base model is 0.43 (English) with the corrected embedder. Whether the gain carries to the human-style benchmark questions is exactly what the dev evaluation tests. The rule is treated as a reason to check dev next and to not report validation numbers as a result.
 - Checkpoint: `models/r1_inbatch/best` (epoch 3 by validation recall@10). Not yet evaluated on dev.
+
+## 2026-10-28, run 1 on dev (first look at the real benchmark)
+
+`models/r1_inbatch/best` (epoch 3) through the Phase 2 harness (`TorchE5Embedder`, passages up to 512 tokens, runs `dev_ret_*_r1`), compared with the corrected base model (`dev_ret_*_padfix`). Dev, 58 answerable items in 40+ question groups, 95% group-bootstrap intervals (about 30 points wide for one system; the paired differences are tighter).
+
+| Dev, all-language index | Base (corrected) | Tuned run 1 | Paired difference |
+| --- | --- | --- | --- |
+| Embedding only, recall@10 | 0.53 [0.35, 0.69] | **0.79 [0.63, 0.92]** | **+0.267 [+0.148, +0.407]** |
+| Embedding only, recall@1 / MRR | 0.22 / 0.33 | 0.43 / 0.59 | MRR +0.257 [+0.158, +0.360] |
+| English / German / French / Italian recall@10 | 0.43 / 0.67 / 0.37 / 0.66 | 0.80 / 0.88 / 0.70 / 0.81 | per-language cells hold 15 groups: direction only |
+| Hybrid (BM25 + embedding), recall@10 | 0.53 [0.36, 0.67] | 0.72 [0.55, 0.87] | +0.198 [+0.096, +0.308] |
+
+- Gains are in every language and every index configuration (same-language, single-language, all-language); in the same-language controls (German, French, Italian questions against their own language) the tuned model is not worse (0.88 / 0.70 / 0.81 against 0.67 / 0.37 / 0.66): no sign of forgetting on dev.
+- After tuning, **embedding alone (0.79) is better than the hybrid (0.72)** on this index: fusing BM25 with a tuned embedding model drags it down, particularly for English questions where BM25 finds little. One dev comparison, not claimable on its own; to be checked with a weighted fusion.
+- **Against the LLM query translation (system C, dev run `dev_final_C`, built on the buggy embedder, with an LLM reranker over its candidates):** recall@10 0.79 [0.63, 0.92] for both, English 0.80 for both; latency 0.09 s against 11.4 s (p50), cost 0 against 0.0029 USD per question. But recall@1: tuned embedder 0.43, C 0.75 (the LLM reranker orders the top 10, which the embedder alone does not). So on this dev set the tuned model closes the *candidate-finding* gap that translation closes, not the *ordering* gap that the reranker closes. Dev only; not frozen, not on test, and C's first stage was degraded by the embedder bug, so the real gap to a corrected C is unknown.
+- Stop rules: no model worse than base; no overfitting seen in run 1; English dev recall@10 is 0.80, below the 90% flag.
+- Not done: hard negatives (run 2 in progress), data-size ablation, forgetting check beyond the same-language controls, larger base model, ONNX export and CPU latency of the tuned model (the 0.09 s above is the harness' retrieval time with torch on CPU for a single query).

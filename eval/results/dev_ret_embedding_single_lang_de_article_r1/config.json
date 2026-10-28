@@ -1,0 +1,38 @@
+{
+  "config_hash": "646b112e50",
+  "git_sha": "abed012439d7ef58d910809baa4ce08a4e477b13",
+  "judge_model": "none",
+  "judge_prompts": {
+    "facts": "6e9e3aef21b9822e",
+    "faithfulness": "3d9d759fbd9f518d",
+    "trap": "819a324b09beae39"
+  },
+  "n_items": 63,
+  "prompt_hashes": {
+    "facts": "6e9e3aef21b9822e",
+    "faithfulness": "3d9d759fbd9f518d",
+    "trap": "819a324b09beae39"
+  },
+  "provenance": {
+    "agent_prompts": "5dd5bd1f085f",
+    "answer_prompt": "640328361630b6dec18d27cab25d6f5851f832178bcf8bb63736e2dc36712f05",
+    "benchmark_sha256sums": "0e6e115830885495",
+    "bootstrap_seed": 20261017,
+    "corpus_parquet": "e6a8ddac5bcabe3b",
+    "models_toml": "4b85ccd3a13054c0",
+    "price_table": "558e3b1f576823e9",
+    "rerank_prompt": "06df4f393f9771888b691c2cd663e20d8b3c8a59b184848102ed2f8581373e08"
+  },
+  "run_id": "dev_ret_embedding_single_lang_de_article_r1",
+  "split": "dev",
+  "system": {
+    "answer_articles": 5,
+    "answerer": null,
+    "embedder": "torch-e5/r1_inbatch/4265091842c5/maxlen512",
+    "kind": "pipeline",
+    "rerank_k": 30,
+    "reranker": null,
+    "retrieve_k": 60,
+    "retriever": "embedding/single_lang_de/article"
+  }
+}
