@@ -11,3 +11,6 @@ models/
 eval/cache/
 benchmark/plan/briefs/
 data/processed/review_aids/
+
+# Personal Claude Code settings
+.claude/settings.local.json

@@ -49,7 +49,7 @@ Six phases over about 14 weeks at 8–10 h/week; each phase ends with something 
 | 0 · Scope and data | 1–2 | Corpus slice in DE/FR/IT, articles aligned and chunked, public repo created | done |
 | 1 · Benchmark | 3–4 | ~150 hand-checked questions with gold answer + source article, not-in-corpus traps | done (frozen v1, review coverage lower than planned: see phase 1 report) |
 | 2 · Baseline harness | 5–6 | Hybrid retrieval + LLM rerank; Claude, GPT, Gemini compared on recall, faithfulness, cost | done (plus a translation control and an ADK agent; see phase 2 report) |
-| 3 · Fine-tuning | 7–10 | Small multilingual reranker; base vs. tuned vs. LLM; quality vs. cost per query | next |
+| 3 · Fine-tuning | 7–10 | Fine-tuned multilingual embedding model (primary) and, if time allows, a small reranker; base vs. tuned vs. LLM query translation; quality, latency and cost per query | in progress (learning mode; see Phase 3 decision below) |
 | 4 · Ship | 11–12 | Live demo + MCP server, results page, one-command reproduction | planned |
 | 5 · Write-up and apply | 13–14 | Long-form post + LinkedIn, CV updated, applications start | planned |
 
@@ -64,6 +64,15 @@ Phases 0 to 2 are done; each has a report in `docs/`. Findings that shape the re
 - **Train/eval separation:** exclude `benchmark/v1/dev_gold_articles.txt`, `test_gold_articles.txt` and their neighbouring articles from all fine-tuning pairs.
 - **Costs observed:** about 0.002 to 0.003 USD per question for a Haiku-based pipeline; judging costs about twice the system itself. Phase 2 spent about 11 USD of the 25 USD monthly cap.
 - **Open from phase 2:** one non-expert, English-only labeller calibrated the judge (81% agreement); no Swiss-law expert has reviewed any benchmark item. An expert or student spot check remains the largest unaddressed validity risk.
+
+## Phase 3 decision: what we fine-tune (2026-10-28)
+
+Phase 2 showed that LLM rerankers are indistinguishable on this benchmark and that first-stage cross-lingual retrieval is the bottleneck (bare hybrid recall@10 for English questions 14%; 71% after LLM query translation at about 18 s per question). Decision, agreed with Francisco:
+
+- **Primary: fine-tune the bi-encoder** (multilingual-e5-small, the embedding model of system A) on synthetic EN/DE/FR/IT questions paired with their articles. **Updated core question for this phase:** can a fine-tuned small embedding model close the gap that LLM query translation closes, with no LLM call at query time (about 0.1 s and 0 USD per query instead of about 18 s and 0.003 USD)? Compared against system C on recall@10 with paired bootstrap intervals, and also against C's retrieval before its reranker, so the comparison does not mix two effects.
+- **Secondary, only if time allows:** fine-tune a small multilingual cross-encoder reranker over a wider candidate window and compare it with the Haiku reranker on quality, cost and latency (the original question; Phase 2 suggests a tie on quality).
+- **Compute:** no NVIDIA GPU on the dev machine; training on a free Kaggle or Colab GPU (notebooks in `notebooks/`), everything else on local CPU. No paid compute.
+- **Stop rules** unchanged from the kickoff: any overlap with dev/test gold, neighbours or twins; tuned model worse than base on dev; validation loss rising while training loss falls; a result that looks too good (English recall@10 above 90% without an LLM).
 
 ## Phase 0: access check and tasks
 
