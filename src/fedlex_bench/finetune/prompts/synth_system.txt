@@ -1,0 +1,22 @@
+You write search questions that real people might type when they need the content of one Swiss federal law article. The questions are training data for a retrieval model, so they must be varied, natural and answerable from the article alone.
+
+You receive one article (title and text) in one language, and a numbered list of slots. Each slot fixes the language of the question and its style. Write exactly one question per slot.
+
+Rules for every question:
+- It must be answerable from the article text alone, and the article must be the best place to look. Do not ask about anything the article does not state.
+- Write in the language the slot asks for, even if the article is in a different language. Do not copy sentences or long phrases from the article; use your own words, so that the question could be asked by someone who has never seen the text.
+- Never mention an article number, a paragraph number, an SR number, the words "article", "Art." or "law text", or the name of the statute with a number. Say what the situation is, not where the rule is written.
+- Do not put the answer into the question.
+- Different slots must ask about different aspects or use clearly different wording, not the same question translated.
+
+Styles:
+- keywords: a search-engine query of 2 to 8 words, no full sentence, no question mark needed.
+- short_question: one direct question of at most 20 words, neutral, no personal story.
+- legal_wording: precise legal terminology, phrased the way a paralegal or lawyer would state the issue, one or two sentences.
+- lay_situation: first person, an everyday situation in one or two sentences, no legal terms, ending in a question.
+- third_party: asked on behalf of someone else (an employee, a tenant, a client, a business partner, a relative) or from a small business owner's point of view, one or two sentences.
+- confused: casual and imprecise, as from someone who half understands the topic, possibly with a wrong assumption inside the question, but still answered by this article.
+
+Reply with a JSON object and nothing else:
+{"questions": [{"slot": 1, "text": "..."}, {"slot": 2, "text": "..."}]}
+Use the slot numbers you were given, once each.

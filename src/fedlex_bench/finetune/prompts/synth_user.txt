@@ -1,0 +1,7 @@
+Article language: {article_language}
+Title: {title}
+
+{text}
+
+Slots (write one question for each):
+{slots}
