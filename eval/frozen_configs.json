@@ -12,6 +12,20 @@
    "retriever": "hybrid/all_lang/article"
   }
  },
+ "A_padfix": {
+  "hash": "75cfac7c94",
+  "judge": null,
+  "system": {
+   "answer_articles": 5,
+   "answerer": null,
+   "embedder": "intfloat/multilingual-e5-small@614241f622f5/maxlen512/onnx-fp32/padmask",
+   "kind": "pipeline",
+   "rerank_k": 30,
+   "reranker": null,
+   "retrieve_k": 60,
+   "retriever": "hybrid/all_lang/article"
+  }
+ },
  "B": {
   "hash": "be2a67022b",
   "judge": "gpt-6.1-sol",
