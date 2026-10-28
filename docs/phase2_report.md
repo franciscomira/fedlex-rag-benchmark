@@ -2,6 +2,8 @@
 
 Date: 2026-10-18. Benchmark: `benchmark/v1/` (tag `benchmark-v1`, unchanged). Spec: [eval_spec.md](eval_spec.md) with its dated amendments. Working log: [phase2_progress.md](phase2_progress.md). Harness review: [phase2_harness_review.md](phase2_harness_review.md).
 
+> **Errata, 2026-10-28.** A bug in the ONNX embedder (padding tokens were averaged into the vector of every batched text, so the passage vectors of the index were degraded) affected every retrieval number in this report that uses embeddings: A, B, C and D. The statements below were measured with the buggy embedder and are kept as published. See [Errata](#errata-2026-10-28-embedder-padding-bug) at the end for the corrected system A (test recall@10 0.55 against 0.49, English 0.24 against 0.14) and for what is and is not known about B, C and D.
+
 ## Summary
 
 - Four frozen configurations were each run once on the test split (179 items: 110 original answerable questions, 54 translations of 18 of them, 15 traps; 164 answerable items in the tables). Configurations, hashes and the hypotheses were written down before any test number existed.
@@ -140,3 +142,25 @@ uv run python -m fedlex_bench.eval compare 2026-10-18_test_89a1a1a0ad 2026-10-18
 ```
 
 Run folders (`config.json`, `per_item.jsonl`, `metrics.json`; the agent run also has `traces/traces.jsonl`) are under `eval/results/`. A rerun from scratch needs the three API keys and the cache; the frozen configuration hashes are in `eval/frozen_configs.json` and every test run is in `eval/test_runs.log`.
+
+## Errata (2026-10-28): embedder padding bug
+
+**What was wrong.** `OnnxE5Embedder` embedded texts in batches, and the tokenizer padded every text of a batch to the longest one. The embedder took each text's length from the padded ids, so its attention mask was 1 over the padding and the pad tokens were averaged into the mean-pooled vector. A text embedded alone (every query at search time) was correct; a text embedded in a batch was not (cosine to its correct vector 0.93 to 1.00 on a sample, lowest for short texts that shared a batch with long ones). All passage vectors of the index came from batches (chunks of 1,024 sorted by length, then batches of 32). It was found in Phase 3 when a torch validation of the same untrained model gave recall@10 0.78 where the ONNX pipeline gave 0.44 on the same questions. Fix: commit 7c5bdbe (the real length is the mask sum; the corrected vectors have their own cache id; `OnnxE5Embedder(mask_padding=False)` reproduces the old vectors; a regression test compares a short text in a batch with the same text alone). Details and the diagnosis: `docs/phase3_progress.md`.
+
+**What was re-measured.**
+
+| | Phase 2 (buggy embedder) | Corrected embedder |
+| --- | --- | --- |
+| Test, system A (hybrid, all-language, no model), recall@10, n = 164 | 0.49 [0.40, 0.58] | **0.55 [0.46, 0.63]** |
+| recall@1 / MRR | 0.22 / 0.32 | 0.25 / 0.36 |
+| English / German / French / Italian recall@10 | 0.14 / 0.58 / 0.65 / 0.60 | 0.24 [0.12, 0.37] / 0.60 / 0.72 / 0.63 |
+| Originals only (n = 110) recall@10 | 0.51 | 0.58 |
+| Paired difference corrected minus old, recall@10 | | +0.055 [+0.009, +0.104] (MRR +0.037 [+0.010, +0.064]) |
+| Dev, hybrid all-language, recall@10 (n = 58 answerable) | 0.46 | 0.53 [0.36, 0.67] |
+| Dev, embedding only, all-language | 0.40 | 0.53 |
+
+The corrected test run is run `2026-10-28_test_75cfac7c94` (frozen as `A_padfix`, hash 75cfac7c94, which differs from A's hash because the configuration now records the embedder id). It is retrieval only: no model call, no tuning, and no cost. It is the **second use of the test split for system A**; the hypothesis was written before the run (`docs/phase3_progress.md`): overall 0.50 to 0.60 (observed 0.55), English 0.25 to 0.40 (observed 0.24, just below the range). The overall gain is claimable but small (the interval's lower bound is +0.009); per language, the intervals overlap.
+
+**What is not known.** B, C and D used the same retrieval stage with the buggy embedder (B and D over the all-language hybrid index, C over the per-language indexes), so their candidate lists were weaker than the model allows. Their reranker, answerer and judge numbers are what they are, but their recall, fact recall and the gaps between systems (C over B, D over B, D over C) were measured on degraded candidates, and might change in either direction (a better first stage helps B most, which narrows the gap that C's query translation closes; the English gap of C over A will shrink from 0.57 at least in part). These claims in the report should be read as conditional on the buggy first stage until the frozen B, C and D are rerun with the corrected embedder. Decision on that rerun: open (see `docs/phase3_progress.md`).
+
+**Process.** The dev retrieval runs with the corrected embedder are `dev_ret_*_padfix`. The test log has one extra `started` and `completed` pair for the new frozen configuration; the Phase 2 runs are untouched.
