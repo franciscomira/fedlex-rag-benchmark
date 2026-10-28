@@ -16,3 +16,5 @@ data/processed/review_aids/
 .claude/settings.local.json
 
 data/finetune/mined*.jsonl
+
+notebooks/kit/
