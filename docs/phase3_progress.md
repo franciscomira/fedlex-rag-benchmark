@@ -106,3 +106,20 @@ Dev, `models/r2_hardneg/best` (runs `dev_ret_*_r2`), paired with run 1 (`*_r1`) 
 - **Hard negatives do not help measurably** on dev (the difference is +0.017 with an interval touching zero; the only language that moved is French, by one item group) nor on validation, and they cost 1.7 times the training time per step. Planned comparison, decided before the dev run: use the simpler in-batch run unless hard negatives are clearly better. **Run 1 (in-batch only) is the main configuration.** The hard-negative filter, the audit and the corrected mining stay in the repository as measured negative results.
 - Why they probably did not matter: the base model was already strong at ranking the positive in the top 30 for 84% of questions, in-batch negatives (63 random articles per question) already provide most of the signal, and the filter keeps only safe negatives, which are by construction not the confusing ones. These are explanations, not tested ones.
 - Dev has now been used for three decisions (run 1 versus base, run 2 versus run 1, tuned versus hybrid); no choice was made on test.
+
+## 2026-10-28, data-size ablation (in-batch, 2e-5, 3 epochs; 25% and 50% of the training articles, nested)
+
+Validation (1,296 synthetic questions, 3,201 candidates): recall@10 0.781 (base), 0.918 (25%: 2,876 pairs, 720 articles), 0.925 (50%: 5,752 pairs), 0.9375 (100%: 11,504 pairs); English 0.670, 0.906, 0.912, 0.927; validation loss 3.12, 0.368, 0.308, 0.246.
+
+Dev, embedding only, all-language index (runs `dev_ret_embedding_all_lang_article_r3_frac25|frac50|r1|padfix`):
+
+| Training data | Recall@10 | Recall@1 | MRR | EN / DE / FR / IT recall@10 |
+| --- | --- | --- | --- | --- |
+| 0% (corrected base) | 0.53 [0.35, 0.69] | 0.22 | 0.33 | 0.43 / 0.67 / 0.37 / 0.66 |
+| 25% | 0.76 [0.59, 0.89] | 0.38 | 0.53 | 0.80 / 0.88 / 0.63 / 0.75 |
+| 50% | 0.76 [0.59, 0.89] | 0.39 | 0.54 | 0.80 / 0.88 / 0.63 / 0.75 |
+| 100% (run 1) | 0.79 [0.63, 0.92] | 0.43 | 0.59 | 0.80 / 0.88 / 0.70 / 0.81 |
+
+Paired differences on dev: 25% over base +0.233 [+0.117, +0.362] recall@10, MRR +0.194 [+0.111, +0.288] (claimable); 50% over 25% 0.000 (no claim); 100% over 50% recall@10 +0.034 [0.000, +0.093] (no claim), MRR +0.053 [+0.011, +0.096] (claimable).
+- Most of the gain (recall@10 +0.23 of +0.26) comes from the first 25% of the data (720 articles, 2,876 questions, 135 steps); further data improves the ordering within the top 10 (MRR) and the French and Italian cells, not the English cell (0.80 at every size). Per-language cells are 15 groups, so only the direction counts.
+- Confound: the smaller runs also take proportionally fewer steps (135, 270, 540). A fixed-steps ablation would separate data from steps; it was not run. One seed per size; seed-to-seed variation was not measured.
