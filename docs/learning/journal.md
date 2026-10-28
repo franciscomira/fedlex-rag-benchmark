@@ -17,5 +17,5 @@ Embedding only, all-language index, article chunks. Predict recall@10 for Englis
 Predict English recall@10 and German recall@10 after training (embedding only), the learning rate and number of epochs you choose, and whether validation loss will rise before the last epoch.
 
 - Choices (Francisco, 2026-10-28): learning rate 2e-5, 3 epochs (Claude's suggested default, accepted). No prediction given this time.
-- Result: _after the run_
-- What we learned: _after the run_
+- Result (validation, 1,296 synthetic questions ranked among 3,201 articles; dev: see `docs/phase3_progress.md`): English recall@10 0.67 -> 0.927, German 0.911 -> 0.946, overall 0.781 -> 0.9375. Validation loss fell at every epoch (3.12, 0.300, 0.257, 0.246) with training loss 0.96, 0.28, 0.22: no overfitting. On dev, embedding only, all-language: recall@10 0.53 -> 0.79 (+0.27 [+0.15, +0.41]), English 0.43 -> 0.80.
+- What we learned: almost all of the gain arrived in the first of three epochs, so more epochs were not what mattered; a loss that drops from 3.1 to 0.3 in 180 steps says the base model already had the right structure and needed to learn what these questions look like and how English maps onto German, French and Italian text. The validation and dev numbers disagree about the size of the gain (validation 0.78 -> 0.94, dev 0.53 -> 0.79) because validation uses the same generator as the training data; only dev counts as a result.

@@ -76,3 +76,17 @@ Settings chosen by Francisco: learning rate 2e-5, 3 epochs, batch 64, scale 20, 
 - **Against the LLM query translation (system C, dev run `dev_final_C`, built on the buggy embedder, with an LLM reranker over its candidates):** recall@10 0.79 [0.63, 0.92] for both, English 0.80 for both; latency 0.09 s against 11.4 s (p50), cost 0 against 0.0029 USD per question. But recall@1: tuned embedder 0.43, C 0.75 (the LLM reranker orders the top 10, which the embedder alone does not). So on this dev set the tuned model closes the *candidate-finding* gap that translation closes, not the *ordering* gap that the reranker closes. Dev only; not frozen, not on test, and C's first stage was degraded by the embedder bug, so the real gap to a corrected C is unknown.
 - Stop rules: no model worse than base; no overfitting seen in run 1; English dev recall@10 is 0.80, below the 90% flag.
 - Not done: hard negatives (run 2 in progress), data-size ablation, forgetting check beyond the same-language controls, larger base model, ONNX export and CPU latency of the tuned model (the 0.09 s above is the harness' retrieval time with torch on CPU for a single query).
+
+## 2026-10-28, run 2 (in-batch plus one hard negative per question) on the Kaggle T4
+
+Same settings as run 1 (2e-5, 3 epochs, batch 64), `hard negatives True`, corrected hard negatives (kit 45a81b62). Epoch 0 identical to run 1 (validation loss 3.1196, recall@10 0.7809), so data and validation are the same.
+
+| Epoch | Train loss (run 2 / run 1) | Val loss (run 2 / run 1) | Val R@1 | Val R@10 | R@10 EN | R@10 DE |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | 1.38 / 0.96 | 0.292 / 0.300 | 0.701 / 0.699 | 0.927 / 0.925 | 0.918 / 0.920 | 0.929 / 0.915 |
+| 2 | 0.52 / 0.28 | 0.249 / 0.257 | 0.721 / 0.717 | 0.934 / 0.934 | 0.921 / 0.927 | 0.942 / 0.938 |
+| 3 | 0.41 / 0.22 | 0.240 / 0.246 | 0.721 / 0.719 | 0.9375 / 0.9375 | 0.926 / 0.927 | 0.942 / 0.946 |
+
+- On validation, hard negatives made no measurable difference: recall@10 is identical at epoch 3 (0.9375), recall@1 and MRR differ by 0.002 and 0.000, validation loss is 0.006 lower (validation loss is computed without hard negatives in both runs). Training loss is higher because the extra negatives are harder, not because learning is worse; the two training curves are not comparable.
+- Cost: 0.7 s/step in epoch 1 against 0.4 s/step (about 1.7 times slower per step).
+- Validation sits near a ceiling for in-domain synthetic questions, so it is a weak instrument for this comparison. Dev (the human-style benchmark questions) is the check; the checkpoint has to be downloaded first.
