@@ -4,6 +4,8 @@ they fail on any overlap."""
 
 from __future__ import annotations
 
+import json
+
 import pandas as pd
 import pytest
 
@@ -80,3 +82,34 @@ def test_pool_has_no_gold_twins(pool):
     texts = dict(zip(german["article_id"], german["text"], strict=True))
     twins = twins_of_gold(texts, read_gold_ids(), TWIN_THRESHOLD)
     assert pool & set(twins) == set()
+
+
+# --- the files that actually feed training: pairs (positives) and hard negatives -----------------
+
+PAIRS_FILE = FINETUNE_DIR / "pairs.jsonl"
+HARDNEG_FILE = FINETUNE_DIR / "hardneg.jsonl"
+
+
+def _rows(path):
+    if not path.exists():
+        pytest.skip(f"{path.name} missing")
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
+
+
+def test_every_positive_is_in_the_pool_and_no_article_is_in_both_splits(pool):
+    pairs = _rows(PAIRS_FILE)
+    assert {p["article_id"] for p in pairs} <= pool
+    train = {p["article_id"] for p in pairs if p["split"] == "train"}
+    val = {p["article_id"] for p in pairs if p["split"] == "val"}
+    assert train and val and train & val == set()
+
+
+def test_hard_negatives_are_in_the_pool_never_the_positive_and_never_gold(pool):
+    pairs = {p["pair_id"]: p for p in _rows(PAIRS_FILE)}
+    gold = read_gold_ids()
+    for row in _rows(HARDNEG_FILE):
+        for neg in row["negatives"]:
+            assert neg in pool
+            assert neg not in gold
+            assert neg != pairs[row["pair_id"]]["article_id"]
+        assert pairs[row["pair_id"]]["split"] == "train"
