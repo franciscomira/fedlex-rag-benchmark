@@ -81,3 +81,23 @@ def test_e5_onnx_semantic_sanity():
     sims = (q @ p.T)[0]
     assert sims[0] > sims[1]
     assert np.allclose(emb.embed_passages(["abc"]), emb.embed_passages(["abc"]))
+
+
+@pytest.mark.skipif(not _model_available(), reason="e5 ONNX model not in local HF cache")
+def test_e5_onnx_batch_equals_single_text():
+    """Padding must not change a vector: a short text embedded in a batch with a long one equals
+    the same text embedded alone (the Phase 2 embedder averaged pad tokens into batched texts)."""
+    from fedlex_bench.retrieval.embedding import OnnxE5Embedder
+
+    emb = OnnxE5Embedder()
+    short = "Der Mieter hat den Mietzins zu bezahlen."
+    long = " ".join(
+        ["Der Vermieter darf den Mietzins nur nach Massgabe des Gesetzes erhoehen."] * 12
+    )
+    batch = emb.embed_passages([short, long, short])
+    alone = emb.embed_passages([short])[0]
+    assert float(batch[0] @ alone) > 0.9999 and float(batch[2] @ alone) > 0.9999
+    # the legacy mode keeps the old behaviour and its own cache id
+    legacy = OnnxE5Embedder(mask_padding=False)
+    assert legacy.model_id != emb.model_id
+    assert float(legacy.embed_passages([short, long])[0] @ alone) < 0.999

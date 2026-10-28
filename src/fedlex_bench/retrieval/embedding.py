@@ -63,10 +63,16 @@ class OnnxE5Embedder:
         max_length: int = E5_MAX_LENGTH,
         batch_size: int = 32,
         threads: int | None = None,
+        mask_padding: bool = True,
     ) -> None:
         self.repo, self.revision = repo, revision
         self.max_length, self.batch_size, self.threads = max_length, batch_size, threads
-        self.model_id = f"{repo}@{revision[:12]}/maxlen{max_length}/onnx-fp32"
+        # mask_padding=False reproduces the Phase 2 vectors, which averaged pad tokens into every
+        # batched text (see docs/phase3_progress.md, 2026-10-28). It has its own model id, so the
+        # old cache store stays valid for it and is never mixed with the corrected vectors.
+        self.mask_padding = mask_padding
+        suffix = "/padmask" if mask_padding else ""  # "" is the id of the Phase 2 vectors
+        self.model_id = f"{repo}@{revision[:12]}/maxlen{max_length}/onnx-fp32{suffix}"
         self._session = None
         self._tok = None
 
@@ -97,7 +103,8 @@ class OnnxE5Embedder:
             return np.zeros((0, self.dim), dtype=np.float32)
         self._load()
         encs = self._tok.encode_batch([prefix + t for t in texts])
-        lengths = [len(e.ids) for e in encs]
+        # The tokenizer pads every text to the longest of the call. Real length = mask sum.
+        lengths = [sum(e.attention_mask) if self.mask_padding else len(e.ids) for e in encs]
         order = sorted(range(len(texts)), key=lambda i: (-lengths[i], i))  # long first, stable
         out = np.zeros((len(texts), self.dim), dtype=np.float32)
         for start in range(0, len(order), self.batch_size):
@@ -107,7 +114,7 @@ class OnnxE5Embedder:
             mask = np.zeros((len(idx), width), dtype=np.int64)
             for row, i in enumerate(idx):
                 n = lengths[i]
-                ids[row, :n] = encs[i].ids
+                ids[row, :n] = encs[i].ids[:n]
                 mask[row, :n] = 1
             feed = {"input_ids": ids, "attention_mask": mask}
             if "token_type_ids" in self._input_names:
