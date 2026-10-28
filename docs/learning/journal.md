@@ -16,6 +16,6 @@ Embedding only, all-language index, article chunks. Predict recall@10 for Englis
 
 Predict English recall@10 and German recall@10 after training (embedding only), the learning rate and number of epochs you choose, and whether validation loss will rise before the last epoch.
 
-- Prediction (Francisco): _write here_
+- Choices (Francisco, 2026-10-28): learning rate 2e-5, 3 epochs (Claude's suggested default, accepted). No prediction given this time.
 - Result: _after the run_
 - What we learned: _after the run_
