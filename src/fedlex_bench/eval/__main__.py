@@ -57,11 +57,19 @@ def _build_agent(args, env, answerer):
     )
 
 
-def _build(args: argparse.Namespace):
-    from fedlex_bench.llm import LLMReranker, build_client
+def _retrieval_env(args: argparse.Namespace):
     from fedlex_bench.retrieval import RetrievalEnv
 
-    env = RetrievalEnv()
+    if getattr(args, "embedder", None):  # a fine-tuned checkpoint instead of the base model
+        from fedlex_bench.finetune.embedder import TorchE5Embedder
+
+        return RetrievalEnv(embedder=TorchE5Embedder(args.embedder))
+    return RetrievalEnv()
+
+
+def _build(args: argparse.Namespace):
+    from fedlex_bench.llm import LLMReranker, build_client
+    env = _retrieval_env(args)
     retriever = env.retriever(args.method, args.config, args.chunking)
     reranker = (
         LLMReranker(build_client(args.rerank), max_candidates=args.rerank_k) if args.rerank else None
@@ -240,6 +248,7 @@ def main(argv: list[str] | None = None) -> None:
     r.add_argument("--method", choices=["bm25", "embedding", "hybrid"], default="hybrid")
     r.add_argument("--config", default="all_lang")
     r.add_argument("--chunking", default="article")
+    r.add_argument("--embedder", help="folder of a fine-tuned checkpoint (default: base e5-small)")
     r.add_argument("--rerank", help="model ref, e.g. anthropic/small")
     r.add_argument("--answer", help="model ref, e.g. anthropic/small")
     r.add_argument("--agent", help="model ref for the ADK planner/checker; runs the agent system")

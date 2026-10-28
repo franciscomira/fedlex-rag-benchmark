@@ -189,9 +189,12 @@ def sha256(path: Path) -> str:
 def git_sha() -> str:
     try:
         return subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], cwd=PROJECT_ROOT, text=True
+            ["git", "rev-parse", "HEAD"], cwd=PROJECT_ROOT, text=True, stderr=subprocess.DEVNULL
         ).strip()
     except (OSError, subprocess.CalledProcessError):
+        kit = PROJECT_ROOT / "KIT_INFO.json"  # on Kaggle the code comes from the kit, not a clone
+        if kit.exists():
+            return "kit:" + json.loads(kit.read_text(encoding="utf-8"))["git_sha"]
         return "unknown"
 
 

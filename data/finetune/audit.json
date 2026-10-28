@@ -5,41 +5,41 @@
   "filtered": {
    "n": 100,
    "failed": 0,
-   "yes": 3,
-   "partly": 16,
-   "no": 81,
-   "yes_rate": 0.03,
+   "yes": 1,
+   "partly": 24,
+   "no": 75,
+   "yes_rate": 0.01,
    "yes_ci95": [
-    0.01,
-    0.085
+    0.002,
+    0.054
    ],
-   "yes_or_partly_rate": 0.19
+   "yes_or_partly_rate": 0.25
   },
   "raw": {
    "n": 100,
    "failed": 0,
-   "yes": 2,
-   "partly": 18,
-   "no": 80,
-   "yes_rate": 0.02,
+   "yes": 4,
+   "partly": 34,
+   "no": 62,
+   "yes_rate": 0.04,
    "yes_ci95": [
-    0.006,
-    0.07
+    0.016,
+    0.098
    ],
-   "yes_or_partly_rate": 0.2
+   "yes_or_partly_rate": 0.38
   },
   "positive": {
    "n": 100,
    "failed": 0,
-   "yes": 79,
+   "yes": 80,
    "partly": 20,
-   "no": 1,
-   "yes_rate": 0.79,
+   "no": 0,
+   "yes_rate": 0.8,
    "yes_ci95": [
-    0.7,
-    0.858
+    0.711,
+    0.867
    ],
-   "yes_or_partly_rate": 0.99
+   "yes_or_partly_rate": 1.0
   },
   "random": {
    "n": 30,
