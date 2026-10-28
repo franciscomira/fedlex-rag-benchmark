@@ -25,6 +25,10 @@ dev = [
     "pytest>=8.2",
     "ruff>=0.5",
 ]
+finetune = [
+    "sentence-transformers>=6.2.0",
+    "torch>=2.14.1",
+]
 review = [
     "streamlit>=1.66.0",
 ]
