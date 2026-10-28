@@ -12,7 +12,8 @@ Training data for fine-tuning `intfloat/multilingual-e5-small` as a cross-lingua
 | `queries_failed.json` | the one article that failed validation | yes |
 | `pairs.jsonl` | the questions with train/validation split and passage language | yes |
 | `hardneg.jsonl` | up to 3 hard-negative article ids per training question | yes |
-| `review_hardneg.md` | a 20-example read-through sheet for the negatives | yes |
+| `review_hardneg.md`, `review_hardneg_en.md` | a 20-example read-through sheet for the negatives, German and with English machine glosses | yes |
+| `audit.json`, `audit_rows.jsonl` | the LLM audit of negatives and positives (see below) | yes |
 | `mined.jsonl`, `mined_sample.jsonl` | the 30 best embedding and BM25 candidates per question (about 15 MB) | no, rebuild with `mine` |
 | `queries_sample.jsonl` | the 20-article pilot | yes |
 
@@ -39,9 +40,24 @@ Observations on the base model that shaped the filter: its cosine scores are com
 
 `uv run pytest tests/test_finetune_leakage.py` fails on any of: a gold article, a gold neighbour or a twin of gold in the pool; a positive outside the pool; an article in both train and validation; a hard negative outside the pool, equal to the positive, or a gold article. Result on the files above: **all pass, no overlap** (11 tests with `test_finetune_synth.py`). A deliberately poisoned pool made the gold and twin checks fail. The check covers article ids; it does not cover paraphrase leakage of benchmark questions into synthetic ones (the synthetic prompt never saw a benchmark question).
 
+## Audit by a second model family
+
+Nobody on the project reads German, French and Italian well enough to review the data, so a model from another family than the generator (`gpt-6-luna`, judge of Phase 2's sensitivity check, known to be lenient) judged 330 (question, article) pairs: does the article contain what is needed to answer the question (`yes`, `partly`, `no`). Cost 0.04 USD. 100 sampled training questions, the same questions in every set (`audit.py`, seed 20261028):
+
+| Candidate article | n | yes | partly | no |
+| --- | --- | --- | --- | --- |
+| first hard negative chosen by the filter | 100 | 3 (95% CI 0.01 to 0.08) | 16 | 81 |
+| best wrong article of the base model, no filter | 100 | 2 (0.01 to 0.07) | 18 | 80 |
+| the labelled positive | 100 | 79 (0.70 to 0.86) | 20 | 1 |
+| a random pool article (control) | 30 | 0 | 0 | 30 |
+
+- **False negatives are rare in both sets (about 3%), and the filter does not measurably reduce them** (3 against 2 of 100, on largely the same questions). What the filter changed is hubness, not false negatives. All 3 filtered false negatives are the same pattern: the Code of Obligations repeats a rule for another company form (stock corporation versus limited-liability company, for example `220:710` against `220:896`, term of office). The 0.3 text-overlap rule does not catch these; a rule on same-title articles in the same act would.
+- **About one question in five is only partly answered by its own article** (20 of 100, `lay_situation` 48% of its 23 questions, `legal_wording` 12%, `short_question` and `keywords` none; per-style cells hold 5 to 23 questions, so read them as hints). One was not answered (an adoption article for a naturalisation question). The judge is lenient, so the true share is probably not lower. The training signal is still mostly right (the article is the best place), but the positive labels are noisy, and the in-batch loss will treat a partial match as the correct answer.
+- The judge was not calibrated on this task, and nobody checked a sample of its verdicts against the legal text.
+
 ## Limitations
 
-- The questions are model-written and unreviewed by a Swiss-law expert. A few garble a legal term, and questions on generic provisions can fit a neighbouring article too (false positives for the label). The noise rate is not measured; an LLM audit of the negatives is planned.
+- The questions are model-written, and no human who reads German, French or Italian, nor a Swiss-law expert, reviewed them. The only check is the LLM audit above (about 1 in 5 questions only partly answered by its article; about 3% of hard negatives also answer the question).
 - 17% of the training questions have no hard negative after filtering, most of them `keywords` and English questions, where the base model's candidate list is mostly generic hubs.
 - English dominates (50%); German, French and Italian have 16 to 17% each.
 - Same drafting model family as the benchmark's questions (Claude); the style variety is meant to limit, not remove, the shared drafting style.

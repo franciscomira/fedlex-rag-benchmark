@@ -1,0 +1,58 @@
+{
+ "judge": "gpt-6-luna",
+ "seed": 20261028,
+ "sets": {
+  "filtered": {
+   "n": 100,
+   "failed": 0,
+   "yes": 3,
+   "partly": 16,
+   "no": 81,
+   "yes_rate": 0.03,
+   "yes_ci95": [
+    0.01,
+    0.085
+   ],
+   "yes_or_partly_rate": 0.19
+  },
+  "raw": {
+   "n": 100,
+   "failed": 0,
+   "yes": 2,
+   "partly": 18,
+   "no": 80,
+   "yes_rate": 0.02,
+   "yes_ci95": [
+    0.006,
+    0.07
+   ],
+   "yes_or_partly_rate": 0.2
+  },
+  "positive": {
+   "n": 100,
+   "failed": 0,
+   "yes": 79,
+   "partly": 20,
+   "no": 1,
+   "yes_rate": 0.79,
+   "yes_ci95": [
+    0.7,
+    0.858
+   ],
+   "yes_or_partly_rate": 0.99
+  },
+  "random": {
+   "n": 30,
+   "failed": 0,
+   "yes": 0,
+   "partly": 0,
+   "no": 30,
+   "yes_rate": 0.0,
+   "yes_ci95": [
+    0.0,
+    0.114
+   ],
+   "yes_or_partly_rate": 0.0
+  }
+ }
+}
