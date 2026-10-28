@@ -53,6 +53,21 @@
    "translator": "claude-haiku-5-5"
   }
  },
+ "Cprime": {
+  "hash": "033e9b80b2",
+  "judge": null,
+  "system": {
+   "answer_articles": 5,
+   "answerer": null,
+   "embedder": "intfloat/multilingual-e5-small@614241f622f5/maxlen512/onnx-fp32/padmask",
+   "kind": "translate_retrieve",
+   "rerank_k": 60,
+   "reranker": "llm_rerank/claude-haiku-5-5",
+   "retrieve_k": 60,
+   "retriever": "per_lang/hybrid/single_lang_de/article+hybrid/single_lang_fr/article+hybrid/single_lang_it/article",
+   "translator": "claude-haiku-5-5"
+  }
+ },
  "D": {
   "hash": "89a1a1a0ad",
   "judge": "gpt-6.1-sol",
@@ -72,6 +87,34 @@
     "fr": "hybrid/single_lang_fr/article",
     "it": "hybrid/single_lang_it/article"
    }
+  }
+ },
+ "T1": {
+  "hash": "aec4726ef0",
+  "judge": null,
+  "system": {
+   "answer_articles": 5,
+   "answerer": null,
+   "embedder": "torch-e5/r1_inbatch/4265091842c5/maxlen512",
+   "kind": "pipeline",
+   "rerank_k": 30,
+   "reranker": null,
+   "retrieve_k": 60,
+   "retriever": "embedding/all_lang/article"
+  }
+ },
+ "T2": {
+  "hash": "ae60b9e8c1",
+  "judge": null,
+  "system": {
+   "answer_articles": 5,
+   "answerer": null,
+   "embedder": "torch-e5/r1_inbatch/4265091842c5/maxlen512",
+   "kind": "pipeline",
+   "rerank_k": 60,
+   "reranker": "llm_rerank/claude-haiku-5-5",
+   "retrieve_k": 150,
+   "retriever": "embedding/all_lang/article"
   }
  }
 }

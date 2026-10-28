@@ -123,3 +123,27 @@ Dev, embedding only, all-language index (runs `dev_ret_embedding_all_lang_articl
 Paired differences on dev: 25% over base +0.233 [+0.117, +0.362] recall@10, MRR +0.194 [+0.111, +0.288] (claimable); 50% over 25% 0.000 (no claim); 100% over 50% recall@10 +0.034 [0.000, +0.093] (no claim), MRR +0.053 [+0.011, +0.096] (claimable).
 - Most of the gain (recall@10 +0.23 of +0.26) comes from the first 25% of the data (720 articles, 2,876 questions, 135 steps); further data improves the ordering within the top 10 (MRR) and the French and Italian cells, not the English cell (0.80 at every size). Per-language cells are 15 groups, so only the direction counts.
 - Confound: the smaller runs also take proportionally fewer steps (135, 270, 540). A fixed-steps ablation would separate data from steps; it was not run. One seed per size; seed-to-seed variation was not measured.
+
+## 2026-10-28, freeze for test: T1, T2 and C' (written before any of these three has a test number)
+
+Dry runs on dev (run once each before freezing, to catch bugs; same arguments as the frozen configurations), 58 answerable items, intervals about 30 points wide:
+
+| Dev | Recall@1 | Recall@10 | MRR | English R@10 | Cost / question | p50 / p95 latency |
+| --- | --- | --- | --- | --- | --- | --- |
+| T1 tuned embedding, no model | 0.43 | 0.79 [0.63, 0.92] | 0.59 | 0.80 | 0 | 0.1 / 0.3 s |
+| T2 tuned embedding + Haiku reranker | 0.83 [0.68, 0.94] | 0.91 [0.75, 1.00] | 0.88 | 0.93 | 0.0018 USD | 1.4 / 4.5 s |
+| C' translation + corrected hybrid + Haiku reranker | 0.75 [0.58, 0.88] | 0.84 [0.69, 0.96] | 0.82 | 0.93 | 0.0025 USD | 8.1 / 12.0 s |
+| C (Phase 2, buggy embedder) | 0.75 | 0.79 | 0.80 | 0.80 | 0.0029 USD | 11.4 / 18.0 s |
+
+Frozen configurations (each run once on test; retrieval metrics only: no answerer, no judge):
+- **T1**: `--method embedding --config all_lang --chunking article --embedder models/r1_inbatch/best --retrieve-k 60 --rerank-k 30` (tuned run 1, epoch 3, weights hash in the config).
+- **T2**: T1's embedder with `--rerank claude-haiku-5-5 --retrieve-k 150 --rerank-k 60`.
+- **C'**: Phase 2's C without the answerer and with the corrected embedder: `--translate claude-haiku-5-5 --method hybrid --chunking article --rerank claude-haiku-5-5 --retrieve-k 60 --rerank-k 60`.
+
+Hypotheses, fixed now:
+1. T1 beats the corrected system A (0.55 on test) on recall@10 and MRR, claimably. Expected T1 recall@10 0.70 to 0.85 overall, English 0.60 to 0.85, recall@1 0.35 to 0.50.
+2. T2 beats T1 on recall@1 and MRR, claimably (the reranker orders the top 10); expected T2 recall@10 0.80 to 0.92, recall@1 0.65 to 0.85.
+3. T2 and C' are not distinguishable on recall@10 (expected difference below 0.08, not claimable) and T2 has lower latency (about 1 to 2 s against 8 to 10 s p50) and lower cost per question.
+4. T1 against C' on recall@10: T1 lower by 0 to 0.15; with about 110 groups the interval may or may not exclude zero. The claim to make: "within X of the LLM translation pipeline at no cost and 0.1 s", with the interval and the recall@1 gap stated, not "matches".
+5. English: T1's English recall@10 is at least 0.60 (Phase 2 corrected A: 0.24).
+Notes: cost per question for T2 and C' comes from live calls; the latency of cached model calls is replayed. Judge cost is zero (no judge). These three are the up-to-three configurations allowed; no other configuration will be run on test in Phase 3 unless a bug requires it, which would be reported. Total spend estimate for the three test runs: about 0.8 USD.
