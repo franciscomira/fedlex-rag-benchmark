@@ -117,6 +117,11 @@ class IndexRetriever:
         self.depth, self.rrf_k = depth, rrf_k
         self.name = f"{method}/{index_config}/{chunking}"
 
+    @property
+    def embedder_id(self) -> str | None:
+        """Model id of the embedder behind this retriever (None for BM25): part of eval configs."""
+        return self.env.embedder.model_id if self.method in ("embedding", "hybrid") else None
+
     def scope_for(self, query_lang: str) -> Scope:
         if query_lang not in QUERY_LANGS:
             raise ValueError(f"query_lang must be one of {QUERY_LANGS}, got {query_lang!r}")

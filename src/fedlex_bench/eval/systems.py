@@ -22,6 +22,11 @@ from fedlex_bench.types import (
 )
 
 
+def _embedder_entry(retriever) -> dict[str, Any]:
+    eid = getattr(retriever, "embedder_id", None)
+    return {"embedder": eid} if eid else {}
+
+
 class PipelineSystem:
     """retrieve `retrieve_k` chunks; optionally rerank the first `rerank_k`; optionally answer.
 
@@ -77,7 +82,9 @@ class PipelineSystem:
             rr = self.reranker.rerank(query, query_lang, head, len(head))
             reranked = list(rr.candidates)
             kept = {(c.article_id, c.lang, c.chunk_id) for c in reranked}  # replace() copies
-            dropped = [c for c in head if (c.article_id, c.lang, c.chunk_id) not in kept]  # never lose a candidate
+            dropped = [
+                c for c in head if (c.article_id, c.lang, c.chunk_id) not in kept
+            ]  # never lose a candidate
             candidates = reranked + dropped + tail
             usage = usage + rr.usage
         answer = None
@@ -104,6 +111,9 @@ class PipelineSystem:
             "retrieve_k": self.retrieve_k,
             "rerank_k": self.rerank_k,
             "answer_articles": self.answer_articles,
+            # added 2026-10-28 (embedder padding fix): only present when the retriever has an
+            # embedder, so configs of BM25 and fake retrievers keep their hashes.
+            **_embedder_entry(self.retriever),
         }
 
 
@@ -156,5 +166,10 @@ class TranslateRetrieveSystem(PipelineSystem):
         return [first[article_id] for article_id, _ in fused], usage
 
     def config(self) -> dict[str, Any]:
-        return {**super().config(), "kind": "translate_retrieve", "translator": self.llm.model_id,
-                "retriever": "per_lang/" + "+".join(r.name for r in self.retrievers.values())}
+        return {
+            **super().config(),
+            "kind": "translate_retrieve",
+            "translator": self.llm.model_id,
+            "retriever": "per_lang/" + "+".join(r.name for r in self.retrievers.values()),
+            **_embedder_entry(next(iter(self.retrievers.values()))),
+        }
