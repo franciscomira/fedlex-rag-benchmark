@@ -147,3 +147,33 @@ Hypotheses, fixed now:
 4. T1 against C' on recall@10: T1 lower by 0 to 0.15; with about 110 groups the interval may or may not exclude zero. The claim to make: "within X of the LLM translation pipeline at no cost and 0.1 s", with the interval and the recall@1 gap stated, not "matches".
 5. English: T1's English recall@10 is at least 0.60 (Phase 2 corrected A: 0.24).
 Notes: cost per question for T2 and C' comes from live calls; the latency of cached model calls is replayed. Judge cost is zero (no judge). These three are the up-to-three configurations allowed; no other configuration will be run on test in Phase 3 unless a bug requires it, which would be reported. Total spend estimate for the three test runs: about 0.8 USD.
+
+## 2026-10-28, test results for the three frozen configurations (each run once; retrieval metrics only)
+
+Runs `2026-10-28_test_aec4726ef0` (T1), `..._ae60b9e8c1` (T2), `..._033e9b80b2` (C'); the corrected A is `..._75cfac7c94`. n = 164 answerable items (110 originals plus translations), 95% group-bootstrap intervals.
+
+| System | Recall@1 | Recall@10 | MRR | Cost / q (USD) | Latency p50 / p95 |
+| --- | --- | --- | --- | --- | --- |
+| A, Phase 2 (buggy embedder) | 0.22 [0.15, 0.29] | 0.49 [0.40, 0.58] | 0.32 [0.25, 0.40] | 0 | 0.1 / 0.1 s |
+| A, corrected embedder | 0.25 [0.18, 0.33] | 0.55 [0.46, 0.63] | 0.36 [0.29, 0.44] | 0 | 0.1 / 0.1 s |
+| **T1** tuned embedding, no LLM | 0.48 [0.38, 0.59] | **0.81 [0.71, 0.90]** | 0.63 [0.53, 0.73] | 0 | 0.1 / 0.1 s |
+| **T2** tuned embedding + Haiku reranker | **0.79 [0.70, 0.88]** | **0.89 [0.80, 0.97]** | 0.87 [0.78, 0.95] | 0.0016 | 1.6 / 4.5 s |
+| **C'** translation + corrected hybrid + Haiku reranker | 0.76 [0.67, 0.84] | 0.87 [0.79, 0.94] | 0.84 [0.76, 0.91] | 0.0024 | 8.0 / 10.5 s |
+| C, Phase 2 (buggy embedder; answer step included) | 0.74 [0.65, 0.83] | 0.81 [0.73, 0.89] | 0.80 [0.71, 0.88] | 0.0028 | 18.3 / 23.7 s |
+
+Recall@10 by question language (English / German / French / Italian): A corrected 0.24 / 0.60 / 0.72 / 0.63; **T1 0.80 [0.68, 0.90] / 0.79 / 0.81 / 0.83**; T2 0.89 / 0.87 / 0.88 / 0.91; C' 0.86 / 0.90 / 0.84 / 0.90; C (Phase 2) 0.71 / 0.85 / 0.84 / 0.85. Originals only (n = 110) recall@10: A corrected 0.58, T1 0.88, T2 0.93, C' 0.89.
+
+Paired differences (first minus second, recall@10 and MRR, 95% interval):
+- T1 minus corrected A: **+0.262 [+0.174, +0.351]**, MRR +0.271 [+0.182, +0.361] (claimable).
+- T2 minus T1: recall@10 **+0.079 [+0.029, +0.139]**, MRR **+0.238 [+0.158, +0.320]** (claimable).
+- T2 minus C': recall@10 +0.015 [-0.052, +0.074], MRR +0.032 [-0.036, +0.091] (**not claimable**); T2 is 5 times faster (p50 1.6 against 8.0 s) and 33% cheaper (0.0016 against 0.0024 USD per question).
+- T1 minus C': recall@10 **-0.064 [-0.149, +0.016]** (not claimable), MRR **-0.207 [-0.305, -0.106]** (C' orders better; claimable).
+- C' against Phase 2's C was not compared pairwise (the harness refuses runs with different judges); unpaired recall@10 0.87 [0.79, 0.94] against 0.81 [0.73, 0.89] overlap.
+
+Against the hypotheses fixed before the runs: 1 (T1 beats corrected A, T1 recall@10 in 0.70 to 0.85, English at least 0.60, recall@1 in 0.35 to 0.50): held (0.81, 0.80, 0.48). 2 (T2 beats T1 on recall@1 and MRR; T2 recall@10 0.80 to 0.92, recall@1 0.65 to 0.85): held (0.89, 0.79; MRR claimable). 3 (T2 and C' indistinguishable on recall@10, T2 faster and cheaper): held. 4 (T1 below C' by 0 to 0.15 on recall@10, maybe not claimable): held (-0.064, not claimable). 5: held. No hypothesis failed.
+
+What this means for the core question (stated with its limits):
+- Candidate finding with no LLM: a fine-tuned 118M-parameter embedding model reaches recall@10 0.81 on test, within 0.06 of the LLM-translation pipeline's 0.87 (interval -0.15 to +0.02: the difference is not resolved either way), at 0 cost and 0.1 s instead of 0.0024 USD and 8 s. It is clearly worse at putting the right article first (MRR 0.63 against 0.84; recall@1 0.48 against 0.76).
+- With the Haiku reranker on top, the tuned model is as good as the LLM-translation pipeline (+0.015 recall@10, +0.032 MRR, both inside the noise) at a fifth of the latency and two thirds of the cost; the English gap is closed (0.89 against 0.86).
+- The result is on one benchmark that rewards finding an article an LLM drafted a question from (see the Phase 2 limitations). It does not show anything about answers: no answerer or judge ran.
+- Spend: three test runs plus dry runs about 0.6 USD; month spend 12.67 of 25 USD.
