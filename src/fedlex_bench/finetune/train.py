@@ -13,10 +13,12 @@ prefixes, the passage is ``title + newline + text`` in the pair's passage langua
 L2 normalisation.
 
 Each epoch (epoch 0 = the untrained model) is evaluated on the validation split: in-batch loss on
-fixed validation batches, and recall@1/10 and MRR of the positive among the 324 validation
-articles (best of the three language versions), per question language. The best epoch by
-validation recall@10 is saved to ``models/<run>/best`` (git-ignored) with ``config.json`` (all
-arguments, SHA-256 of the data files, git sha, library versions) and ``log.jsonl``.
+fixed validation batches, and recall@1/10 and MRR of the validation questions' positive among
+**all 3,201 pool articles** (best of the three language versions; a 324-article pool would be
+too easy, the untrained model already reaches 93% recall@10 there), per question language. The
+best epoch by validation recall@10 is saved to ``models/<run>/best`` (git-ignored) with
+``config.json`` (all arguments, SHA-256 of the data files, git sha, library versions) and
+``log.jsonl``.
 
 ``--max-steps N`` only times N steps and saves nothing.
 """
@@ -115,7 +117,9 @@ class Data:
             train = [p for p in train if p["article_id"] in keep]
         self.train = train
         self.val = [p for p in pairs if p["split"] == "val"]
-        self.val_articles = sorted({p["article_id"] for p in self.val})
+        self.candidate_articles = sorted(
+            pool
+        )  # candidates: the whole pool, not only validation articles
 
 
 def batch_tensors(enc: Encoder, batch: list[dict], data: Data, args, hard: bool):
@@ -142,7 +146,7 @@ def evaluate(enc: Encoder, data: Data, args) -> dict:
         ).item()
         for b in make_batches(data.val, args.batch_size, args.seed, 0)
     ]
-    keys = [(a, lang) for a in data.val_articles for lang in LANGS]
+    keys = [(a, lang) for a in data.candidate_articles for lang in LANGS]
     pas = torch.cat(
         [
             enc.encode("passage: ", [data.text[k] for k in keys[i : i + 64]], args.max_len_passage)
@@ -155,8 +159,13 @@ def evaluate(enc: Encoder, data: Data, args) -> dict:
             for i in range(0, len(data.val), 64)
         ]
     )
-    sims = (queries @ pas.T).view(len(data.val), len(data.val_articles), len(LANGS)).max(-1).values
-    position = {a: i for i, a in enumerate(data.val_articles)}
+    sims = (
+        (queries @ pas.T)
+        .view(len(data.val), len(data.candidate_articles), len(LANGS))
+        .max(-1)
+        .values
+    )
+    position = {a: i for i, a in enumerate(data.candidate_articles)}
     ranks = [
         int((sims[i] > sims[i, position[p["article_id"]]]).sum()) + 1
         for i, p in enumerate(data.val)
