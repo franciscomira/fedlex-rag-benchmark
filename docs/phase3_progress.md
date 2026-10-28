@@ -90,3 +90,19 @@ Same settings as run 1 (2e-5, 3 epochs, batch 64), `hard negatives True`, correc
 - On validation, hard negatives made no measurable difference: recall@10 is identical at epoch 3 (0.9375), recall@1 and MRR differ by 0.002 and 0.000, validation loss is 0.006 lower (validation loss is computed without hard negatives in both runs). Training loss is higher because the extra negatives are harder, not because learning is worse; the two training curves are not comparable.
 - Cost: 0.7 s/step in epoch 1 against 0.4 s/step (about 1.7 times slower per step).
 - Validation sits near a ceiling for in-domain synthetic questions, so it is a weak instrument for this comparison. Dev (the human-style benchmark questions) is the check; the checkpoint has to be downloaded first.
+
+## 2026-10-28, run 2 on dev (hard negatives) and the choice between runs
+
+Dev, `models/r2_hardneg/best` (runs `dev_ret_*_r2`), paired with run 1 (`*_r1`) and the corrected base model (`*_padfix`), 58 answerable items:
+
+| Dev, all-language index | Base | Run 1 (in-batch) | Run 2 (+ hard negatives) | Run 2 minus run 1 |
+| --- | --- | --- | --- | --- |
+| Embedding only, recall@10 | 0.53 | 0.79 [0.63, 0.92] | 0.81 [0.65, 0.93] | +0.017 [+0.000, +0.061], no claim |
+| Embedding only, recall@1 / MRR | 0.22 / 0.33 | 0.43 / 0.59 | 0.39 / 0.58 | MRR -0.014 [-0.058, +0.026], no claim |
+| Hybrid, recall@10 | 0.53 | 0.72 | 0.74 | +0.017 [+0.000, +0.061], no claim |
+| English / German / French / Italian (embedding only) | 0.43 / 0.67 / 0.37 / 0.66 | 0.80 / 0.88 / 0.70 / 0.81 | 0.80 / 0.88 / 0.77 / 0.81 | one French item |
+
+- Run 2 against base: recall@10 +0.284 [+0.164, +0.427] (embedding only), +0.216 [+0.112, +0.328] (hybrid).
+- **Hard negatives do not help measurably** on dev (the difference is +0.017 with an interval touching zero; the only language that moved is French, by one item group) nor on validation, and they cost 1.7 times the training time per step. Planned comparison, decided before the dev run: use the simpler in-batch run unless hard negatives are clearly better. **Run 1 (in-batch only) is the main configuration.** The hard-negative filter, the audit and the corrected mining stay in the repository as measured negative results.
+- Why they probably did not matter: the base model was already strong at ranking the positive in the top 30 for 84% of questions, in-batch negatives (63 random articles per question) already provide most of the signal, and the filter keeps only safe negatives, which are by construction not the confusing ones. These are explanations, not tested ones.
+- Dev has now been used for three decisions (run 1 versus base, run 2 versus run 1, tuned versus hybrid); no choice was made on test.
