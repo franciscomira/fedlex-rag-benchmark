@@ -26,6 +26,7 @@ dev = [
     "ruff>=0.5",
 ]
 finetune = [
+    "onnx>=1.23.2",
     "sentence-transformers>=6.2.0",
     "torch>=2.14.1",
 ]

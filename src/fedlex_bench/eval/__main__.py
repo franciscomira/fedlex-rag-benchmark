@@ -61,6 +61,11 @@ def _retrieval_env(args: argparse.Namespace):
     from fedlex_bench.retrieval import RetrievalEnv
 
     if getattr(args, "embedder", None):  # a fine-tuned checkpoint instead of the base model
+        path = Path(args.embedder)
+        if path.suffix == ".onnx":  # exported model: <dir>/<file>.onnx plus <dir>/tokenizer.json
+            from fedlex_bench.retrieval.embedding import OnnxE5Embedder
+
+            return RetrievalEnv(embedder=OnnxE5Embedder(local_dir=path.parent, onnx_file=path.name))
         from fedlex_bench.finetune.embedder import TorchE5Embedder
 
         return RetrievalEnv(embedder=TorchE5Embedder(args.embedder))

@@ -64,8 +64,11 @@ class OnnxE5Embedder:
         batch_size: int = 32,
         threads: int | None = None,
         mask_padding: bool = True,
+        local_dir: Path | str | None = None,
+        onnx_file: str = "model.onnx",
     ) -> None:
         self.repo, self.revision = repo, revision
+        self.local_dir, self.onnx_file = Path(local_dir) if local_dir else None, onnx_file
         self.max_length, self.batch_size, self.threads = max_length, batch_size, threads
         # mask_padding=False reproduces the Phase 2 vectors, which averaged pad tokens into every
         # batched text (see docs/phase3_progress.md, 2026-10-28). It has its own model id, so the
@@ -73,6 +76,11 @@ class OnnxE5Embedder:
         self.mask_padding = mask_padding
         suffix = "/padmask" if mask_padding else ""  # "" is the id of the Phase 2 vectors
         self.model_id = f"{repo}@{revision[:12]}/maxlen{max_length}/onnx-fp32{suffix}"
+        if self.local_dir:  # exported fine-tuned model: <onnx_file> and tokenizer.json inside
+            digest = hashlib.sha256((self.local_dir / onnx_file).read_bytes()).hexdigest()[:12]
+            self.model_id = (
+                f"onnx-local/{self.local_dir.parent.name}/{onnx_file}/{digest}/maxlen{max_length}"
+            )
         self._session = None
         self._tok = None
 
@@ -83,8 +91,12 @@ class OnnxE5Embedder:
         from huggingface_hub import hf_hub_download
         from tokenizers import Tokenizer
 
-        model = hf_hub_download(self.repo, "onnx/model.onnx", revision=self.revision)
-        tok_path = hf_hub_download(self.repo, "onnx/tokenizer.json", revision=self.revision)
+        if self.local_dir:
+            model = str(self.local_dir / self.onnx_file)
+            tok_path = str(self.local_dir / "tokenizer.json")
+        else:
+            model = hf_hub_download(self.repo, "onnx/model.onnx", revision=self.revision)
+            tok_path = hf_hub_download(self.repo, "onnx/tokenizer.json", revision=self.revision)
         tok = Tokenizer.from_file(tok_path)
         tok.enable_truncation(max_length=self.max_length)
         tok.enable_padding(pad_id=tok.token_to_id("<pad>"), pad_token="<pad>")

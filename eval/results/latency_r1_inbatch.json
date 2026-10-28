@@ -1,0 +1,53 @@
+{
+ "meta": {
+  "cpu": "AMD64 Family 23 Model 104 Stepping 1, AuthenticAMD",
+  "cores": 12,
+  "python": "3.13.3",
+  "torch": "2.14.1+cpu",
+  "queries": 200,
+  "file_sizes_mb": {
+   "model.onnx": 470,
+   "model_int8.onnx": 118,
+   "model_int8_default.onnx": 118,
+   "model_int8_perchannel.onnx": 118,
+   "model_int8_perchannel_matmul.onnx": 407
+  },
+  "onnxruntime": "1.31.0"
+ },
+ "ms": {
+  "torch fp32, 1 thread": {
+   "p50_ms": 44.4,
+   "p95_ms": 57.6,
+   "mean_ms": 43.8
+  },
+  "onnx fp32, 1 thread": {
+   "p50_ms": 22.4,
+   "p95_ms": 31.1,
+   "mean_ms": 22.2
+  },
+  "onnx int8, 1 thread": {
+   "p50_ms": 19.9,
+   "p95_ms": 32.9,
+   "mean_ms": 20.0
+  },
+  "torch fp32, 12 threads": {
+   "p50_ms": 32.9,
+   "p95_ms": 38.7,
+   "mean_ms": 32.6
+  },
+  "onnx fp32, 12 threads": {
+   "p50_ms": 13.9,
+   "p95_ms": 22.3,
+   "mean_ms": 14.4
+  },
+  "onnx int8, 12 threads": {
+   "p50_ms": 11.6,
+   "p95_ms": 17.4,
+   "mean_ms": 11.6
+  },
+  "search over 11,000 vectors": {
+   "p50_ms": 1.13,
+   "p95_ms": 1.33
+  }
+ }
+}
