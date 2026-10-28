@@ -49,7 +49,7 @@ Six phases over about 14 weeks at 8–10 h/week; each phase ends with something 
 | 0 · Scope and data | 1–2 | Corpus slice in DE/FR/IT, articles aligned and chunked, public repo created | done |
 | 1 · Benchmark | 3–4 | ~150 hand-checked questions with gold answer + source article, not-in-corpus traps | done (frozen v1, review coverage lower than planned: see phase 1 report) |
 | 2 · Baseline harness | 5–6 | Hybrid retrieval + LLM rerank; Claude, GPT, Gemini compared on recall, faithfulness, cost | done (plus a translation control and an ADK agent; see phase 2 report) |
-| 3 · Fine-tuning | 7–10 | Fine-tuned multilingual embedding model (primary) and, if time allows, a small reranker; base vs. tuned vs. LLM query translation; quality, latency and cost per query | in progress (learning mode; see Phase 3 decision below) |
+| 3 · Fine-tuning | 7–10 | Fine-tuned multilingual embedding model (primary) and, if time allows, a small reranker; base vs. tuned vs. LLM query translation; quality, latency and cost per query | done (retrieval only; see `docs/phase3_report.md`) |
 | 4 · Ship | 11–12 | Live demo + MCP server, results page, one-command reproduction | planned |
 | 5 · Write-up and apply | 13–14 | Long-form post + LinkedIn, CV updated, applications start | planned |
 
@@ -64,6 +64,10 @@ Phases 0 to 2 are done; each has a report in `docs/`. Findings that shape the re
 - **Train/eval separation:** exclude `benchmark/v1/dev_gold_articles.txt`, `test_gold_articles.txt` and their neighbouring articles from all fine-tuning pairs.
 - **Costs observed:** about 0.002 to 0.003 USD per question for a Haiku-based pipeline; judging costs about twice the system itself. Phase 2 spent about 11 USD of the 25 USD monthly cap.
 - **Open from phase 2:** one non-expert, English-only labeller calibrated the judge (81% agreement); no Swiss-law expert has reviewed any benchmark item. An expert or student spot check remains the largest unaddressed validity risk.
+
+## Phase 3 result (2026-10-28)
+
+The fine-tuned embedding model (multilingual-e5-small, 11.5k synthetic questions, 3 epochs on a free GPU, 2.16 USD) reaches test recall@10 **0.81 [0.71, 0.90]** with no LLM call (0.1 s, 0 USD), against 0.55 for the untuned hybrid (+0.26 [+0.17, +0.35]); English questions 0.24 to 0.80. The LLM-translation pipeline reaches 0.87 [0.79, 0.94] at 8 s and 0.0024 USD (difference to the tuned model not claimable on recall@10, clearly better at ordering: MRR 0.84 against 0.63). Tuned embedder plus the Haiku reranker: 0.89 [0.80, 0.97], not distinguishable from the translation pipeline, five times faster. Retrieval only: answer quality was not re-measured. Hard negatives did not help; a quarter of the data gives most of the gain. A padding bug in the Phase 2 embedder was found and corrected (errata in the Phase 2 report: Phase 2 retrieval numbers were too low). Open for later: answer-level reruns with the corrected first stage, the int8 model on test, a Swiss-law expert review, and a visual follow-up project.
 
 ## Phase 3 decision: what we fine-tune (2026-10-28)
 

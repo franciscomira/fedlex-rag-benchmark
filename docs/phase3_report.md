@@ -5,7 +5,7 @@ Date: 2026-10-28. Benchmark: `benchmark/v1/` (tag `benchmark-v1`, unchanged). Wo
 ## Summary
 
 - **Question.** Can a small fine-tuned multilingual model close the gap that LLM query translation closes in cross-lingual retrieval over Swiss federal law, without an LLM call at query time? Phase 2 had shown that the first stage, not the reranker, was the bottleneck, so the model tuned is the bi-encoder behind system A (`intfloat/multilingual-e5-small`, 118M parameters), not a reranker.
-- **Answer on test (164 answerable items, 95% group bootstrap).** The tuned embedder alone (T1, no LLM, 0.1 s, 0 USD) reaches recall@10 **0.81 [0.71, 0.90]** against 0.55 [0.46, 0.63] for the untuned system with the corrected embedder (+0.26 [+0.17, +0.35]); English questions go from 0.24 to **0.80**. The LLM-translation pipeline (C', 8 s, 0.0024 USD per question) reaches 0.87 [0.79, 0.94]; the difference to T1 on recall@10 (-0.06 [-0.15, +0.02]) is **not claimable**. On ordering the gap is clear: MRR 0.63 against 0.84 (-0.21 [-0.31, -0.11]), recall@1 0.48 against 0.76.
+- **Answer on test (164 answerable items, 95% group bootstrap).** The tuned embedder alone (T1, no LLM, 0.1 s, 0 USD) reaches recall@10 **0.81 [0.71, 0.90]** against 0.55 [0.46, 0.63] for the untuned hybrid (embedding plus BM25) with the corrected embedder (+0.26 [+0.17, +0.35]; the comparison changes the weights and drops BM25 at once, but on dev the untuned model scored the same 0.53 as embedding-only and as hybrid, so the gain is the tuning; on the 142 test items whose gold article is not touched by a pool article contained in it, the gain is +0.30 [+0.20, +0.40] in group means); English questions go from 0.24 to **0.80**. The LLM-translation pipeline (C', 8 s, 0.0024 USD per question) reaches 0.87 [0.79, 0.94]; the difference to T1 on recall@10 (-0.06 [-0.15, +0.02]) is **not claimable**. On ordering the gap is clear: MRR 0.63 against 0.84 (-0.21 [-0.31, -0.11]), recall@1 0.48 against 0.76.
 - **With a cheap reranker (T2: tuned embedder plus the Haiku reranker)** recall@10 is 0.89 [0.80, 0.97], MRR 0.87, at 1.6 s and 0.0016 USD per question: not distinguishable from C' (+0.015 [-0.05, +0.07] recall@10, +0.03 [-0.04, +0.09] MRR) and 5 times faster, a third cheaper.
 - **Retrieval only.** No answer was generated or judged in Phase 3. Nothing here shows that final answers improve.
 - **Training is cheap.** 11,504 synthetic questions (0.87 USD to generate), 3 epochs, under 15 minutes on a free Kaggle T4 (0.4 s per step). A quarter of the data gives most of the dev gain; hard negatives did not help.
@@ -16,7 +16,7 @@ Date: 2026-10-28. Benchmark: `benchmark/v1/` (tag `benchmark-v1`, unchanged). Wo
 
 | Step | What | Where |
 | --- | --- | --- |
-| Pool and leakage | 3,663 retrieval-eligible articles minus 172 dev/test gold, 288 neighbours, 3 twins (character 5-gram Jaccard at least 0.5): **3,201** training articles; tests fail on any overlap | `finetune/exclusions.py`, `tests/test_finetune_leakage.py` |
+| Pool and leakage | 3,663 retrieval-eligible articles minus 172 dev/test gold, 288 neighbours, 3 twins (character 5-gram Jaccard at least 0.5): **3,201** training articles; tests fail on overlap with gold, neighbours and symmetric twins (see limitation 10) | `finetune/exclusions.py`, `tests/test_finetune_leakage.py` |
 | Synthetic questions | 4 per article (2 English, 2 in two of DE/FR/IT; the language not asked for is the language shown to the generator), six styles, Claude Haiku 5.5, 12,800 questions for 3,200 articles | `finetune/synth.py` |
 | Split | by article: 11,504 train and 1,296 validation questions (324 articles), one passage language per pair | `finetune/dataset.py` |
 | Audit | a model from another family (gpt-6-luna) judged 330 pairs | `finetune/audit.py` |
@@ -34,7 +34,7 @@ Date: 2026-10-28. Benchmark: `benchmark/v1/` (tag `benchmark-v1`, unchanged). Wo
 | 2 | 0.28 | 0.257 | 0.934 | 0.927 | 0.938 |
 | 3 | 0.22 | 0.246 | 0.9375 | 0.927 | 0.946 |
 
-Validation loss fell at every epoch and stayed within 0.03 of training loss: no sign of overfitting. Validation uses questions from the same generator as training and is not reported as a result; it was used for choices between runs.
+Validation loss fell at every epoch (3.12, 0.300, 0.257, 0.246) and ended close to the epoch-average training loss (0.22). The two are not strictly comparable (training loss is averaged over the epoch with dropout on, and starts at 0.96), but validation loss never rose, so there is no sign of overfitting. Validation uses questions from the same generator as training and is not reported as a result; it was used for choices between runs.
 
 ### Dev (58 answerable items; intervals about 30 points wide; embedding only, all-language index)
 
@@ -71,7 +71,7 @@ Paired differences, 95% interval, recall@10 and MRR:
 | T2 minus C' | +0.015 [-0.052, +0.074] | +0.032 [-0.036, +0.091] | no |
 | T1 minus C' | -0.064 [-0.149, +0.016] | -0.207 [-0.305, -0.106] | recall@10 no, MRR yes (C' better) |
 
-All five hypotheses written before the test runs held (`phase3_progress.md`); none failed. The test split was used once for each of T1, T2, C' and B', and twice for system A (the corrected A, an errata run).
+All five hypotheses written before the test runs held (`phase3_progress.md`); none failed. The test split was used once for each of T1, T2, C' and B', and twice for system A (the corrected A, an errata run). B' was frozen after the T1, T2 and C' results were known (an additional errata run for Phase 2, approved afterwards); its configuration is Phase 2's B minus the answerer with the corrected embedder, so no choice was open, but the T2 minus B' comparison was not planned before the other three results.
 
 ### Deployment: CPU latency and the ONNX export
 
@@ -100,19 +100,21 @@ The fp32 export reproduces the torch results exactly. The int8 model is not wors
 `OnnxE5Embedder` took each text's length from a batch that the tokenizer had padded to the longest text, so the attention mask was 1 over the padding and pad tokens were averaged into the vector. A text embedded alone (every query at search time) was right; a text in a batch (every passage of the index, and my mining queries) was not (cosine to the correct vector 0.93 to 1.00). It surfaced because the untrained model scored recall@10 0.78 in a torch validation and 0.44 in the ONNX pipeline on the same questions. Effects:
 - Phase 2's retrieval numbers were too low: corrected system A on test recall@10 0.55 against 0.49 (+0.055 [+0.009, +0.104]), English 0.24 against 0.14; B' 0.74 against B 0.65; C' 0.87 against C 0.81 (unpaired). Phase 2's report carries an erratum. Fact recall, faithfulness and trap results were not re-measured; D was not rerun.
 - My first hard-negative mining, the "hub articles" finding, the "keyword questions are hardest" finding and the first audit were artifacts; they were rebuilt.
-- Fixed in commit 7c5bdbe with a regression test; the old behaviour is available as `OnnxE5Embedder(mask_padding=False)`; eval configurations now record the embedder id.
+- Fixed in commit 7c5bdbe with a regression test; the old behaviour is available as `OnnxE5Embedder(mask_padding=False)`; eval configurations (also the ADK agent's, after review) now record the embedder id.
 
 ## Limitations
 
 1. **The benchmark rewards what the tuned model learns.** Every benchmark question was written by an LLM from the text of one article, and so were the training questions (by the same model family, with six deliberately different styles and a different prompt). The risk is that part of the gain is learning the drafting style, not cross-lingual retrieval. The held-out synthetic validation shows the same shape as dev, which does not rule it out. Real user questions and an expert review of the gold have not been tried.
 2. **Dev and test are small.** 58 and 164 answerable items, about 40 and 110 independent question groups. Per-language cells hold 15 (dev) and 39 to 43 (test) items. Only large differences are claimable.
 3. **Retrieval only.** No answer, citation, faithfulness or refusal measurement was made in Phase 3. T2's better candidates should help answers, but that was not tested. The Phase 2 answer-level results (fact recall, faithfulness, traps) were obtained with the buggy first stage and not repeated.
-4. **No human reviewed the synthetic data.** Nobody on the project reads German, French and Italian well enough; a second-family judge audited 100 sampled questions (80% fully answered by their article, 20% partly, 0 not; 1% of chosen hard negatives also answer the question), with a lenient judge that was not calibrated for this task. No Swiss-law expert reviewed anything.
+4. **No human reviewed the synthetic data.** Nobody on the project reads German, French and Italian well enough; a second-family judge audited 100 sampled questions (80% fully answered by their article, 20% partly, 0 not; of the chosen hard negatives 1% fully and 24% partly answer the question, against 4% and 34% without the filter), with a lenient judge that was not calibrated for this task. No Swiss-law expert reviewed anything.
 5. **One seed, one run per configuration.** Training seed variation was not measured; the ablation confounds data size with the number of steps.
-6. **Hybrid versus embedding only.** After tuning, embedding alone (dev 0.79) beat the hybrid with BM25 (0.72) on dev; one dev comparison, not claimable, not tested further. T1 and T2 use embedding only.
+6. **Hybrid versus embedding only.** After tuning, embedding alone (dev 0.79) beat the hybrid with BM25 (0.72) on dev: recall@10 +0.069 [-0.013, +0.173] (not claimable), MRR +0.154 [+0.052, +0.259] (claimable); not tested further, and not run on test. T1 and T2 use embedding only.
 7. **Latency and cost** come from one machine on one day; cost comes from the price table of 2026-10-17.
 8. **Dev reuse.** Dev was used for several decisions (run 1 against base, run 2 against run 1, hybrid against embedding only, which runs to freeze); no choice was made on test.
-9. **Provider reproducibility.** Reranker and translation responses are reproducible from the disk cache, not from scratch; the tuned checkpoint is not in git (about 450 MB; weights hash in each run's configuration).
+9. **Provider reproducibility and provenance.** Reranker and translation responses are reproducible from the disk cache, not from scratch. The tuned checkpoint is not in git (about 450 MB); T1's weights digest (4265091842c5) is part of its frozen configuration. Run 1's `config.json` records `git_sha: unknown` (runs 2 and 3 record the kit's sha 45a81b62), so run 1 cannot be tied to a code version beyond its data hashes and settings, and the tokenizer files are not hashed.
+10. **Twin exclusion is symmetric.** The pool excluded articles with a character 5-gram Jaccard of at least 0.5 to a gold article. A short pool article contained in a long gold article has a low Jaccard and is not excluded: 6 pool articles are at least 80% contained in a gold article, 37 at least 60% (touching 18 gold articles), 84 at least 50%. This was found in review and not fixed (the pool would change and the model would have to be retrained). Sensitivity: on the 22 test items whose gold article is touched at the 60% level T1's recall@10 is 0.98 (corrected A: 0.68), on the other 142 it is 0.78 (A: 0.52), and the gain of T1 over A on the untouched items is +0.30 [+0.20, +0.40] in group means; so the headline gain does not depend on those items, but part of T1's absolute level on the 22 touched items may.
+11. **Synthetic questions: the planned fixed roles were never applied.** The third-party style was meant to name a role per question; the code for that was dead (found in review and removed), so third-party questions got roles invented by the generator (often a client or a business partner).
 
 ## Reproduction
 

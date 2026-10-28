@@ -41,9 +41,9 @@ An ONNX export (fp32, 470 MB) and an int8 export (118 MB, per-channel dynamic qu
 
 ## Training data
 
-- **Articles:** 3,201 articles of eight federal acts (Code of Obligations 220, Civil Code 210, Civil Procedure 272, Debt Enforcement and Bankruptcy 281.1 and others; German, French and Italian versions from Fedlex). Excluded by code: all 172 gold articles of the evaluation benchmark (dev and test), their neighbours (the previous and next article of the same act, 288) and 3 articles whose text overlaps a gold article by at least 50% (character 5-gram Jaccard). Tests fail on any overlap.
+- **Articles:** 3,201 articles of eight federal acts (Code of Obligations 220, Civil Code 210, Civil Procedure 272, Debt Enforcement and Bankruptcy 281.1 and others; German, French and Italian versions from Fedlex). Excluded by code: all 172 gold articles of the evaluation benchmark (dev and test), their neighbours (the previous and next article of the same act, 288) and 3 articles whose text overlaps a gold article by at least 50% (character 5-gram Jaccard). Tests fail on any overlap by that criterion. It does not catch a short article contained in a long gold article: 37 pool articles are at least 60% contained in one of 18 gold articles; the test gain is unchanged on items not touched by them (+0.30 [+0.20, +0.40]).
 - **Questions:** 12,800 synthetic questions (4 per article: 2 English, 2 in two of German, French, Italian; six styles: keywords, short question, legal wording, lay situation, third party, confused), written by Claude Haiku 5.5 from the article text shown in a language other than the question's. No benchmark question was shown to the generator. 11,504 for training and 1,296 for validation (split by article, 324 held-out articles). One passage language (de, fr or it) per question.
-- **Audit:** a judge from another model family (gpt-6-luna) found that 80 of 100 sampled questions are fully answered by their article, 20 partly, 0 not at all. No human who reads German, French or Italian, and no Swiss-law expert, reviewed the questions.
+- **Audit:** a judge from another model family (gpt-6-luna) found that 80 of 100 sampled questions are fully answered by their article, 20 partly, 0 not at all. The question writer's planned fixed roles for the third-party style were not applied, so the roles in those questions are the generator's choice. No human who reads German, French or Italian, and no Swiss-law expert, reviewed the questions.
 
 ## Training
 
@@ -58,7 +58,7 @@ Plain PyTorch, in-batch softmax ranking loss (scale 20, batch 64, no two questio
 | this model + Claude Haiku 5.5 reranker | 0.79 [0.70, 0.88] | 0.89 [0.80, 0.97] | 0.87 [0.78, 0.95] | 0.89 |
 | LLM query translation + hybrid + Haiku reranker | 0.76 [0.67, 0.84] | 0.87 [0.79, 0.94] | 0.84 [0.76, 0.91] | 0.86 |
 
-The tuned model alone improves recall@10 over the untuned hybrid by +0.26 [+0.17, +0.35]. Against the LLM-translation pipeline, recall@10 is -0.06 [-0.15, +0.02] (not distinguishable) and MRR -0.21 [-0.31, -0.11] (clearly worse at putting the right article first). With a reranker on top the two pipelines are not distinguishable (+0.015 [-0.05, +0.07] recall@10), the tuned one at a fifth of the latency (1.6 s against 8 s) and two thirds of the cost per question.
+The tuned model alone (embeddings only) improves recall@10 over the untuned hybrid (embedding plus BM25) by +0.26 [+0.17, +0.35]; on dev the untuned model scored the same as embedding-only and as hybrid, so this is the effect of tuning. Against the LLM-translation pipeline, recall@10 is -0.06 [-0.15, +0.02] (not distinguishable) and MRR -0.21 [-0.31, -0.11] (clearly worse at putting the right article first). With a reranker on top the two pipelines are not distinguishable (+0.015 [-0.05, +0.07] recall@10), the tuned one at a fifth of the latency (1.6 s against 8 s) and two thirds of the cost per question.
 
 ## Limitations and intended scope
 

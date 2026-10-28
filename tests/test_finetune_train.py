@@ -43,3 +43,23 @@ def test_loss_is_low_for_a_correct_ranking_and_ignores_same_article_columns():
     masked = ranking_loss(q2, p2, ["a", "b", "c"], ["a", "b", "c", "a"], scale=20.0)
     unmasked = ranking_loss(q2, p2, ["a", "b", "c"], ["a", "b", "c", "d"], scale=20.0)
     assert masked < 1e-6 < unmasked
+
+
+def test_torch_embedder_batch_equals_single_text():
+    """Padding must not change a vector (skipped when no trained checkpoint is on this machine)."""
+    import pytest
+
+    from fedlex_bench.ingest import PROJECT_ROOT
+
+    path = PROJECT_ROOT / "models" / "r1_inbatch" / "best"
+    if not (path / "model.safetensors").exists():
+        pytest.skip("no checkpoint")
+    from fedlex_bench.finetune.embedder import TorchE5Embedder
+
+    emb = TorchE5Embedder(path)
+    short = "Der Mieter hat den Mietzins zu bezahlen."
+    long = " ".join(
+        ["Der Vermieter darf den Mietzins nur nach Massgabe des Gesetzes erhoehen."] * 12
+    )
+    batch = emb.embed_passages([short, long])
+    assert float(batch[0] @ emb.embed_passages([short])[0]) > 0.9999

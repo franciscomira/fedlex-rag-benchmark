@@ -47,26 +47,6 @@ SEED = 20261028
 LANGS = ("de", "fr", "it")
 LANG_NAMES = {"en": "English", "de": "German", "fr": "French", "it": "Italian"}
 STYLES = ("keywords", "short_question", "legal_wording", "lay_situation", "third_party", "confused")
-PERSONAS = (
-    "an employee",
-    "a tenant",
-    "a landlord",
-    "a parent",
-    "a freelancer",
-    "the heir of a relative",
-    "a board member of an association",
-    "a shareholder",
-    "a customer",
-    "a seller of a used car",
-    "a farmer",
-    "a student",
-    "a retired person",
-    "a startup founder",
-    "a guarantor",
-    "a creditor",
-    "a craftsperson who was not paid",
-    "a neighbour in a shared building",
-)
 STYLE_HINT = {  # repeated next to each slot so the model cannot drift to its default style
     "keywords": "2 to 8 words, search-engine style",
     "short_question": "one direct neutral question, at most 20 words",

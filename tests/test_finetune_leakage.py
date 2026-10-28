@@ -113,3 +113,47 @@ def test_hard_negatives_are_in_the_pool_never_the_positive_and_never_gold(pool):
             assert neg not in gold
             assert neg != pairs[row["pair_id"]]["article_id"]
         assert pairs[row["pair_id"]]["split"] == "train"
+
+
+def _grams(text: str) -> set[str]:
+    """Own implementation (not the code under test): character 5-grams of lowercased letters."""
+    t = " ".join("".join(c if c.isalnum() else " " for c in text.lower()).split())
+    return {t[i : i + 5] for i in range(max(len(t) - 4, 1))}
+
+
+def test_pool_has_no_gold_twins_independent_check(pool):
+    if not ARTICLES_PARQUET.exists():
+        pytest.skip("articles.parquet missing")
+    eligible = retrieval_eligible(pd.read_parquet(ARTICLES_PARQUET))
+    german = eligible[eligible["lang"] == "de"].drop_duplicates("article_id")
+    text = dict(zip(german["article_id"], german["text"], strict=True))
+    gold = {g: _grams(text[g]) for g in read_gold_ids()}
+    for a in sorted(pool):
+        grams = _grams(text[a])
+        for g, gg in gold.items():
+            assert len(grams & gg) / len(grams | gg) < TWIN_THRESHOLD, (a, g)
+
+
+def test_training_runs_used_the_files_that_are_tested(pool):
+    """models/<run>/config.json records SHA-256 hashes of the data files: they must still match."""
+    import hashlib
+
+    from fedlex_bench.ingest import PROJECT_ROOT
+
+    configs = sorted((PROJECT_ROOT / "models").glob("*/config.json"))
+    if not configs:
+        pytest.skip("no trained models on this machine")
+    files = {
+        "pairs.jsonl": PAIRS_FILE,
+        "train_pool_ids.txt": POOL_FILE,
+        "hardneg.jsonl": HARDNEG_FILE,
+    }
+    for cfg in configs:
+        c = json.loads(cfg.read_text(encoding="utf-8"))
+        for name, path in files.items():
+            if name == "hardneg.jsonl" and not c["args"].get("hard_negatives"):
+                continue  # an in-batch run did not read the negatives
+            assert c["data_sha256"][name] == hashlib.sha256(path.read_bytes()).hexdigest(), (
+                cfg,
+                name,
+            )

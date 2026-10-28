@@ -13,8 +13,8 @@
 ## 2026-10-28, Step 2: training pool and synthetic queries
 
 - Exclusions (`src/fedlex_bench/finetune/exclusions.py`, test `tests/test_finetune_leakage.py`): 3,663 retrieval-eligible article ids; removed 172 dev/test gold, 288 neighbours (previous and next eligible article of the same act), 3 twins of gold at character 5-gram Jaccard >= 0.5 (`220:257c`, `220:808`, `281.1:108`; the benchmark itself used 0.7 and found none). Training pool: **3,201 articles**. The test fails on any overlap; a poisoned pool made the gold and twin checks fail.
-- Synthetic queries (`src/fedlex_bench/finetune/synth.py`, model `claude-haiku-5-5`, prompt hash in the run, seed 20261028): 4 questions per article, 2 English plus two of DE/FR/IT; the article is shown in the language left out. Six styles, four distinct per article, a fixed role for `third_party`.
-- Pilots: 2 x 20 articles (0.005 USD each). The first showed a repeated "my business partner" persona and invented details; fixed with per-slot roles and a no-new-facts rule before the full run.
+- Synthetic queries (`src/fedlex_bench/finetune/synth.py`, model `claude-haiku-5-5`, prompt hash in the run, seed 20261028): 4 questions per article, 2 English plus two of DE/FR/IT; the article is shown in the language left out. Six styles, four distinct per article (a planned fixed role for `third_party` was never applied: see the correction below).
+- Pilots: 2 x 20 articles (0.005 USD each). The first showed a repeated "my business partner" persona and invented details; an instruction to use a role named in the slot and a no-new-facts rule were added before the full run (the code that was to name the roles never took effect; found in review, 2026-10-28).
 - Full run: 3,201 articles, **12,800 questions** from 3,200 articles (EN 6,400, DE 2,130, FR 2,162, IT 2,108); 1 article failed validation twice (`272:163`, id leak) and is left out; 22 articles needed the retry. Styles 2,082 to 2,163 each. Mean length in words: keywords 7.5, short_question 18, confused 28, third_party 31, lay_situation 32, legal_wording 32. Live cost **0.87 USD** (estimate was 1.45); month spend about 11.8 of 25 USD.
 - Known noise (not measured yet): a few questions garble a legal term, and some questions on generic provisions fit a neighbouring article too. Planned handling: the hard-negative false-negative filter, and a manual read of 20 mined examples before training.
 
@@ -184,3 +184,17 @@ Francisco approved one more frozen retrieval-only configuration to give Phase 2'
 Hypotheses, fixed before the test run: B' recall@10 on test is higher than Phase 2's B (0.65), expected 0.72 to 0.85, English 0.45 to 0.75 (B: 0.25); B' is below T2 on recall@10 (T2 0.89) but the difference may not be claimable; no claim is made about answers.
 
 B' on test (run `2026-10-28_test_b7846648c0`, once): recall@1 0.65 [0.56, 0.74], recall@10 **0.74 [0.65, 0.82]**, MRR 0.72 [0.63, 0.81], English recall@10 0.52 [0.38, 0.67] (B: 0.25), German 0.77, French 0.86, Italian 0.81; cost 0.0016 USD per question, p50 1.4 s. Phase 2's B (buggy embedder, with answer step): recall@1 0.59, recall@10 0.65 [0.56, 0.73], MRR 0.64. The hypotheses held (recall@10 in 0.72 to 0.85, English in 0.45 to 0.75). T2 minus B': recall@10 +0.149 [+0.077, +0.225], MRR +0.148 [+0.074, +0.225] (claimable): the tuned first stage beats the corrected untuned hybrid by 15 points. B' and B were not compared pairwise (different judge setting in the run configuration); the unpaired intervals for recall@10 (0.74 against 0.65) overlap slightly. Phase 2's answer-level numbers (fact recall, faithfulness, traps) were not re-measured.
+
+## 2026-10-28, review by the eval-reviewer agent, and what was done about it
+
+No high-severity finding; every test number in the report matched the evidence. Findings and actions:
+1. **Agent config hash ignored the embedder** (a run of the frozen D configuration with another embedder would have passed the guard): fixed, the ADK agent's configuration now records the embedder id. D's frozen hash therefore no longer matches that code; D was not rerun and would need a new freeze.
+2. **The T1 and T2 gains are tuned embedding-only against untuned hybrid**: wording fixed in the report and model card; supporting dev evidence (the base model scored 0.53 as embedding-only and as hybrid) stated.
+3. **Provenance of run 1** (git sha unknown, tokenizer not hashed): stated in the report's limitations.
+4. **B' was frozen after T1, T2 and C' were known**: disclosed in the report.
+5. **Report claim "validation loss within 0.03 of training loss"** was false for epoch 1: reworded.
+6. **Audit reported selectively** (1% "yes" omitted 24% "partly"): both reported.
+7. **Embedding-only against hybrid after tuning on dev**: MRR +0.154 [+0.052, +0.259] is claimable, recall@10 +0.069 [-0.013, +0.173] is not: stated.
+8. **Twin exclusion is symmetric** (containment gap): not fixed (would change the pool and require retraining); quantified (6, 37 and 84 pool articles at 80%, 60% and 50% containment, touching 5, 18 and 33 gold articles) and the headline gain re-estimated on test items not touched at 60%: +0.30 [+0.20, +0.40] in group means (n = 142 items, 97 groups); T1's recall@10 is 0.98 on the 22 touched items and 0.78 on the rest (untuned: 0.68 and 0.52). Disclosed as limitation 10.
+9. **Leakage tests weaker than claimed**: added an independent twin implementation, a test that every model's recorded data hashes match the current files, and a batch-equals-single test for the torch embedder. The corpus tests still skip when the data is absent.
+10. **Persona code never applied**: dead code removed, data README, report and model card corrected (the generated data itself is unchanged).

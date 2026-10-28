@@ -2,7 +2,7 @@
 
 Public portfolio project. Plan: docs/PROJECT_PLAN.md (live version linked inside it).
 
-Status: Phase 3: fine-tuning (learning mode). Phase 2 done (harness, providers, agent; test run once per frozen config, see docs/phase2_report.md). Benchmark v1 frozen, tag benchmark-v1.
+Status: Phase 3 done (fine-tuned embedding model; docs/phase3_report.md; Phase 2 has an errata section for an embedder bug found in Phase 3). Next: Phase 4, ship (demo, MCP server, results page). Benchmark v1 frozen, tag benchmark-v1.
 
 ## Core question
 Can a small fine-tuned multilingual reranker match a frontier LLM reranker on cross-lingual retrieval over Swiss federal law (DE/FR/IT), at a fraction of the cost? Answers must cite article-level sources.

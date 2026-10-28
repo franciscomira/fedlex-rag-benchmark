@@ -56,6 +56,11 @@ def run_coro(coro: Coroutine[Any, Any, _T]) -> _T:
     return box["value"]
 
 
+def _embedder_entry(retrievers: dict) -> dict[str, Any]:
+    ids = {getattr(r, "embedder_id", None) for r in retrievers.values()} - {None}
+    return {"embedder": sorted(ids)[0]} if ids else {}
+
+
 class FedlexAgentSystem:
     """Planner + per-language retrievers + citation checker, built on Google ADK.
 
@@ -135,6 +140,8 @@ class FedlexAgentSystem:
             "llm_model_id": self.llm.model_id,
             "answerer": self.answerer.name,
             "retrievers": {lang: r.name for lang, r in self.retrievers.items()},
+            # added 2026-10-28 (embedder padding fix and review): the embedder behind the retrievers
+            **_embedder_entry(self.retrievers),
             "max_rounds": self.max_rounds,
             "max_tool_calls": self.max_tool_calls,
             "k": self.k,
