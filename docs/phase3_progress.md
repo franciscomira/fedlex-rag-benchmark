@@ -44,3 +44,18 @@
 Written before any corrected test number exists. Corrected dev retrieval (`dev_ret_*_padfix`, 63 items, intervals about 30 points wide): hybrid on the all-language index recall@10 0.46 -> 0.53 overall (English 0.27 -> 0.40, German 0.54 -> 0.62, French 0.43 -> 0.50, Italian 0.59 -> 0.59); embedding only 0.40 -> 0.53 (English 0.27 -> 0.43). Frozen configuration `A_padfix` (hash 75cfac7c94): the Phase 2 system A (hybrid, all-language, article chunks, retrieve 60, no reranker, no model) with the corrected embedder; the config now records the embedder id, which is why its hash differs from A's `78df4b6f59`.
 - Hypothesis: corrected A has a higher test recall@10 than Phase 2's A (0.49 overall, English 0.14). Expected overall 0.50 to 0.60 and English 0.25 to 0.40; German, French and Italian change by less. Only the overall and English differences can plausibly be claimable with 110 groups.
 - This is the second use of the test split for system A, a retrieval-only run with no model call and no tuning. It is logged in `eval/test_runs.log` and will be stated in the Phase 2 errata.
+
+## 2026-10-28, run 1 (in-batch negatives only) on a Kaggle T4
+
+Settings chosen by Francisco: learning rate 2e-5, 3 epochs, batch 64, scale 20, warmup 10%, linear decay, fp16 autocast, passages cut at 256 tokens, queries at 128, seed 20261028; 11,504 train pairs, 180 steps per epoch, 0.4 s per step (first epoch), about 4 minutes per epoch with evaluation. Validation: 1,296 synthetic questions on 324 held-out articles, ranked among all 3,201 pool articles (best of the three language versions).
+
+| Epoch | Train loss | Val loss | Val R@1 | Val R@10 | R@10 EN | R@10 DE | R@10 FR | R@10 IT |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 0 (untrained) | n/a | 3.120 | 0.507 | 0.781 | 0.670 | 0.911 | 0.871 | 0.893 |
+| 1 | 0.957 | 0.300 | 0.699 | 0.925 | 0.920 | 0.915 | 0.933 | 0.944 |
+| 2 | 0.279 | 0.257 | 0.717 | 0.934 | 0.927 | 0.938 | 0.933 | 0.953 |
+| 3 | 0.218 | 0.246 | 0.719 | 0.938 | 0.927 | 0.946 | 0.943 | 0.953 |
+
+- Validation loss fell at every epoch and ended 0.03 above the training loss; there is no sign of overfitting yet. Most of the gain came in the first epoch (English R@10 0.67 to 0.92, R@1 0.40 to 0.67); epochs 2 and 3 add 1.3 points of overall R@10 together, about the width of the interval of 1,296 questions (roughly 1.4 points), so they are not distinguishable from noise. No forgetting is visible on the synthetic validation: German, French and Italian improved too.
+- **Stop-rule flag.** English recall@10 is above 90% (0.927) with no LLM. This is on the synthetic validation, drawn from the same generator as the training questions, and the base model already scored 0.67 there; it is not a dev or test number, and the dev baseline of the base model is 0.43 (English) with the corrected embedder. Whether the gain carries to the human-style benchmark questions is exactly what the dev evaluation tests. The rule is treated as a reason to check dev next and to not report validation numbers as a result.
+- Checkpoint: `models/r1_inbatch/best` (epoch 3 by validation recall@10). Not yet evaluated on dev.

@@ -30,11 +30,13 @@ Training data for fine-tuning `intfloat/multilingual-e5-small` as a cross-lingua
 | --- | --- | --- |
 | Train | 11,504 | 2,876 |
 | Validation | 1,296 | 324 |
-| Hard negatives: 3 / 2 / 1 / 0 kept per training question | 7,538 / 826 / 1,133 / 2,007 | |
+| Hard negatives: 3 / 2 kept per training question | 11,502 / 2 | |
 
 Training questions by style: confused 1,852, keywords 1,907, lay situation 1,951, legal wording 1,954, short question 1,936, third party 1,904.
 
-Observations on the base model that shaped the filter: its cosine scores are compressed (positive 0.874 on average, best wrong article 0.892, 30th-best wrong article 0.873); it ranks the positive first for 20% of the questions and in the top 10 for 39% (legal wording 76%, keywords 13%, English 29%). Without the hub cap and the length rule, 100 short generic articles (3% of the pool) filled 49% of the first-negative slots.
+Observations on the base model (corrected embedder; see the correction below). Among the 3,201 pool articles it ranks the labelled positive first for 48% of the questions, in the top 10 for 75% and in the top 30 for 84%. By question language, top 10: English 64%, German 87%, French 82%, Italian 86%. By style, top 10: legal wording 94%, short question 85%, keywords 83%, third party 66%, confused 61%, lay situation 58%. Cosine scores are compressed, so a score margin cannot separate safe from unsafe negatives. With the filter, 2,675 distinct articles serve as first negative, the 100 most used fill 11% of the first slots, and the median first negative has 421 characters (pool median 377).
+
+**Correction (2026-10-28).** The first version of this data was mined with an embedder that averaged padding tokens into batched vectors (a bug of the Phase 2 code, see `docs/phase2_report.md`, errata). Everything above was rebuilt with the corrected embedder. The earlier conclusions that short generic articles act as hubs (49% of first slots) and that keyword questions are hardest for the base model (top 10: 13%) were artifacts of that bug; the hub cap (25 uses) and the minimum length (100 characters) in the filter stay in place but now bind little.
 
 ## Leakage check
 
@@ -42,23 +44,22 @@ Observations on the base model that shaped the filter: its cosine scores are com
 
 ## Audit by a second model family
 
-Nobody on the project reads German, French and Italian well enough to review the data, so a model from another family than the generator (`gpt-6-luna`, judge of Phase 2's sensitivity check, known to be lenient) judged 330 (question, article) pairs: does the article contain what is needed to answer the question (`yes`, `partly`, `no`). Cost 0.04 USD. 100 sampled training questions, the same questions in every set (`audit.py`, seed 20261028):
+Nobody on the project reads German, French and Italian well enough to review the data, so a model from another family than the generator (`gpt-6-luna`, the Phase 2 sensitivity judge, known to be lenient) judged 330 (question, article) pairs: does the article contain what is needed to answer the question (`yes`, `partly`, `no`). Cost 0.04 USD. 100 sampled training questions, the same questions in every set (`audit.py`, seed 20261028), rerun on the corrected negatives:
 
 | Candidate article | n | yes | partly | no |
 | --- | --- | --- | --- | --- |
-| first hard negative chosen by the filter | 100 | 3 (95% CI 0.01 to 0.08) | 16 | 81 |
-| best wrong article of the base model, no filter | 100 | 2 (0.01 to 0.07) | 18 | 80 |
-| the labelled positive | 100 | 79 (0.70 to 0.86) | 20 | 1 |
+| first hard negative chosen by the filter | 100 | 1 (95% CI 0.00 to 0.05) | 24 | 75 |
+| best wrong article of the base model, no filter | 100 | 4 (0.02 to 0.10) | 34 | 62 |
+| the labelled positive | 100 | 80 (0.71 to 0.87) | 20 | 0 |
 | a random pool article (control) | 30 | 0 | 0 | 30 |
 
-- **False negatives are rare in both sets (about 3%), and the filter does not measurably reduce them** (3 against 2 of 100, on largely the same questions). What the filter changed is hubness, not false negatives. All 3 filtered false negatives are the same pattern: the Code of Obligations repeats a rule for another company form (stock corporation versus limited-liability company, for example `220:710` against `220:896`, term of office). The 0.3 text-overlap rule does not catch these; a rule on same-title articles in the same act would.
-- **About one question in five is only partly answered by its own article** (20 of 100, `lay_situation` 48% of its 23 questions, `legal_wording` 12%, `short_question` and `keywords` none; per-style cells hold 5 to 23 questions, so read them as hints). One was not answered (an adoption article for a naturalisation question). The judge is lenient, so the true share is probably not lower. The training signal is still mostly right (the article is the best place), but the positive labels are noisy, and the in-batch loss will treat a partial match as the correct answer.
-- The judge was not calibrated on this task, and nobody checked a sample of its verdicts against the legal text.
+- **False negatives are rare**: 1 of 100 for the filtered negative, 4 of 100 without the filter (intervals overlap, so the filter's benefit on this measure is suggestive, not shown). 24% of the chosen negatives are "partly" related, which is what a hard negative should be.
+- **About one question in five is only partly answered by its own article** (20 of 100). The judge is lenient, so the true share is probably not lower. The positive labels are noisy but mostly point the right way, and the in-batch loss will treat a partial match as the correct answer.
+- The judge was not calibrated on this task, and nobody checked a sample of its verdicts against the legal text. The false negatives themselves were not inspected after the rebuild.
 
 ## Limitations
 
-- The questions are model-written, and no human who reads German, French or Italian, nor a Swiss-law expert, reviewed them. The only check is the LLM audit above (about 1 in 5 questions only partly answered by its article; about 3% of hard negatives also answer the question).
-- 17% of the training questions have no hard negative after filtering, most of them `keywords` and English questions, where the base model's candidate list is mostly generic hubs.
+- The questions are model-written, and no human who reads German, French or Italian, nor a Swiss-law expert, reviewed them. The only check is the LLM audit above (about 1 in 5 questions only partly answered by its article; 1% of the chosen hard negatives also answer the question).
 - English dominates (50%); German, French and Italian have 16 to 17% each.
 - Same drafting model family as the benchmark's questions (Claude); the style variety is meant to limit, not remove, the shared drafting style.
 
@@ -72,4 +73,4 @@ uv run python -m fedlex_bench.finetune.mine
 uv run python -m fedlex_bench.finetune.hardneg
 ```
 
-SHA-256 prefixes of the committed files: `pairs.jsonl` 9d1ee3e1, `hardneg.jsonl` c4e17b5b, `queries.jsonl` 9f5e919d, `train_pool_ids.txt` 5c7be002.
+SHA-256 prefixes of the committed files are in `KIT_INFO.json` of the Kaggle kit and in every training `config.json` (`data_sha256`).
