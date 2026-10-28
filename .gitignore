@@ -14,3 +14,5 @@ data/processed/review_aids/
 
 # Personal Claude Code settings
 .claude/settings.local.json
+
+data/finetune/mined*.jsonl
