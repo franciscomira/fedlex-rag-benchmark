@@ -39,6 +39,20 @@
    "retriever": "hybrid/all_lang/article"
   }
  },
+ "Bprime": {
+  "hash": "b7846648c0",
+  "judge": null,
+  "system": {
+   "answer_articles": 5,
+   "answerer": null,
+   "embedder": "intfloat/multilingual-e5-small@614241f622f5/maxlen512/onnx-fp32/padmask",
+   "kind": "pipeline",
+   "rerank_k": 60,
+   "reranker": "llm_rerank/claude-haiku-5-5",
+   "retrieve_k": 150,
+   "retriever": "hybrid/all_lang/article"
+  }
+ },
  "C": {
   "hash": "89c5213cec",
   "judge": "gpt-6.1-sol",

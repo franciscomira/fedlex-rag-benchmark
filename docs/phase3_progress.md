@@ -177,3 +177,8 @@ What this means for the core question (stated with its limits):
 - With the Haiku reranker on top, the tuned model is as good as the LLM-translation pipeline (+0.015 recall@10, +0.032 MRR, both inside the noise) at a fifth of the latency and two thirds of the cost; the English gap is closed (0.89 against 0.86).
 - The result is on one benchmark that rewards finding an article an LLM drafted a question from (see the Phase 2 limitations). It does not show anything about answers: no answerer or judge ran.
 - Spend: three test runs plus dry runs about 0.6 USD; month spend 12.67 of 25 USD.
+
+## 2026-10-28, B' (Phase 2 errata run, option b in its small form): corrected B, retrieval only
+
+Francisco approved one more frozen retrieval-only configuration to give Phase 2's system B a corrected number; it is an errata run for Phase 2, not one of Phase 3's three configurations (T1, T2, C'). **B'** = Phase 2's B without the answerer, with the corrected embedder: `--method hybrid --config all_lang --chunking article --rerank claude-haiku-5-5 --retrieve-k 150 --rerank-k 60`. Dev dry run (`dev_Bprime`): recall@1 0.75 [0.59, 0.88], recall@10 0.81 [0.66, 0.93], MRR 0.81; Phase 2's B on dev: 0.62 / 0.66 / 0.67 (buggy embedder).
+Hypotheses, fixed before the test run: B' recall@10 on test is higher than Phase 2's B (0.65), expected 0.72 to 0.85, English 0.45 to 0.75 (B: 0.25); B' is below T2 on recall@10 (T2 0.89) but the difference may not be claimable; no claim is made about answers.
