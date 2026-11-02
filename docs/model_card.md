@@ -6,9 +6,9 @@ tags: [sentence-embeddings, retrieval, legal, swiss-law, cross-lingual, multilin
 library_name: transformers
 ---
 
-# fedlex-e5-small: cross-lingual retrieval over Swiss federal law (draft model card)
+# fedlex-e5-small: cross-lingual retrieval over Swiss federal law
 
-**Status: draft, not published.** Nothing has been pushed anywhere. Numbers below come from `docs/phase3_report.md` and `docs/phase3_progress.md` in the project repository; open items are listed at the end.
+Numbers below come from `docs/phase3_report.md` and `docs/phase3_progress.md` in the project repository ([franciscomira/fedlex-rag-benchmark](https://github.com/franciscomira/fedlex-rag-benchmark)).
 
 A fine-tune of [`intfloat/multilingual-e5-small`](https://huggingface.co/intfloat/multilingual-e5-small) (118M parameters, 384 dimensions) that retrieves Swiss federal law articles (German, French, Italian) for questions in English, German, French or Italian. It is meant as the first stage of a retrieval pipeline: it finds candidate articles; it does not answer questions.
 
@@ -22,8 +22,8 @@ Same conventions as the base model: prefix questions with `query: ` and articles
 import torch, torch.nn.functional as F
 from transformers import AutoModel, AutoTokenizer
 
-tok = AutoTokenizer.from_pretrained("PATH_OR_REPO")
-model = AutoModel.from_pretrained("PATH_OR_REPO").eval()
+tok = AutoTokenizer.from_pretrained("REPO_ID")
+model = AutoModel.from_pretrained("REPO_ID").eval()
 
 def embed(texts, prefix):
     batch = tok([prefix + t for t in texts], padding=True, truncation=True, max_length=512, return_tensors="pt")
@@ -73,9 +73,8 @@ The tuned model alone (embeddings only) improves recall@10 over the untuned hybr
 
 Code, data builders, tests, evaluation runs and reports: the project repository (`src/fedlex_bench/finetune/`, `data/finetune/README.md`, `docs/phase3_report.md`). Data files: training pairs and the pool of article ids are in the repository; the Fedlex article texts come from the public Fedlex platform.
 
-## Open items before publishing
+## Provenance and checks
 
-1. Decide whether to publish the weights and the synthetic questions (the repository owner decides; nothing is pushed without asking).
-2. Confirm the licence of the base model and the terms for the generator's outputs and for Fedlex texts.
-3. Evaluate the int8 model on the test split as its own frozen configuration if it is the file that gets served.
-4. Replace `PATH_OR_REPO`.
+- Base model licence (MIT) checked on the Hugging Face model page, 2026-11-02. The synthetic training questions were written with Claude Haiku 5.5; the statute texts come from Fedlex (see the notice above); the dataset itself is not published here.
+- `training_config.json` and `training_log.jsonl` are the configuration (settings, seed, SHA-256 of the data files) and the per-epoch log of the run that produced these weights. Its `git_sha` field reads `unknown` (the code ran from a Kaggle kit, not a clone); the project repository at the commit of the report contains the training code.
+- `onnx/model_int8.onnx` was checked on the dev split only (recall@10 0.78 against 0.79 for the fp32 model, difference not claimable); it was not run on the test split.
