@@ -1,6 +1,6 @@
 # Fedlex Cross-Lingual RAG Benchmark
 
-How well do frontier LLMs answer questions about Swiss federal law across languages, and can a small fine-tuned reranker match an LLM reranker at a fraction of the cost?
+How well do frontier LLMs answer questions about Swiss federal law across languages, and can a small fine-tuned model close the cross-lingual retrieval gap that an LLM closes, at a fraction of the cost?
 
 Swiss federal law (Fedlex) is published officially in German, French and Italian as parallel texts. This makes a controlled experiment possible: the content stays the same and only the language changes.
 
@@ -18,10 +18,12 @@ Swiss federal law (Fedlex) is published officially in German, French and Italian
 | 0 Scope and data | done: 8 acts, 4,073 articles aligned in DE/FR/IT (12,219 rows). [Report](docs/phase0_report.md) |
 | 1 Benchmark | done: `benchmark/v1`, 242 items (150 answerable questions + 20 traps, plus 72 translations). [Report](docs/phase1_report.md), spec [benchmark_spec.md](docs/benchmark_spec.md) |
 | 2 Baseline harness, providers, agent | done: hybrid retrieval, LLM reranker, three providers, ADK agent, evaluation harness. [Report](docs/phase2_report.md), spec [eval_spec.md](docs/eval_spec.md) |
-| 3 Fine-tuned reranker | next |
+| 3 Fine-tuning | done: a fine-tuned multilingual-e5-small reaches test recall@10 0.81 with no LLM call; retrieval only. [Report](docs/phase3_report.md), [data](data/finetune/README.md), [model card (draft)](docs/model_card.md). Found and corrected an embedder bug that affected the Phase 2 retrieval numbers: see the errata in the [Phase 2 report](docs/phase2_report.md) |
 | 4 Ship, 5 write-up | planned. [Project plan](docs/PROJECT_PLAN.md) |
 
 ### Phase 2 results in one table
+
+> **Errata (2026-10-28).** The retrieval numbers in this table were measured with an embedder that averaged padding tokens into batched vectors, which understated every system that uses embeddings. Retrieval-only reruns with the corrected embedder are in the next section and in the [Phase 2 report](docs/phase2_report.md); the fact-recall numbers were not re-measured. The table is kept as published.
 
 Test split, 164 answerable items, Claude Haiku 5.5 everywhere, judge gpt-6.1-sol, 95% group-bootstrap intervals. Each configuration was run once on test, after being frozen on dev.
 
@@ -34,6 +36,19 @@ Test split, 164 answerable items, Claude Haiku 5.5 everywhere, judge gpt-6.1-sol
 
 The gains of the last two rows over single-shot are concentrated in English questions; the agent does not beat the simple translation control on answer quality (+0.04, interval -0.05 to +0.14). Limitations, including a ceiling effect of this benchmark for strong rerankers and a judge that agrees 81% with the hand labels, are in the [Phase 2 report](docs/phase2_report.md).
 
+### Phase 3 results in one table
+
+Test split, 164 answerable items, retrieval only (no answer or judge), 95% group-bootstrap intervals; each frozen configuration was run once. Hypotheses were written before the runs; none failed. Details, limitations and the paired differences: [Phase 3 report](docs/phase3_report.md).
+
+| System | Recall@1 | Recall@10 | English recall@10 | Cost per question | Latency p50 |
+| --- | --- | --- | --- | --- | --- |
+| Hybrid retrieval, corrected embedder, no model | 0.25 | 0.55 [0.46, 0.63] | 0.24 | 0 | 0.1 s |
+| **Fine-tuned embedder, no LLM** | 0.48 | **0.81 [0.71, 0.90]** | **0.80** | **0** | **0.1 s** |
+| **Fine-tuned embedder + Haiku reranker** | **0.79** | **0.89 [0.80, 0.97]** | 0.89 | $0.0016 | 1.6 s |
+| LLM translation + hybrid + Haiku reranker (corrected) | 0.76 | 0.87 [0.79, 0.94] | 0.86 | $0.0024 | 8.0 s |
+
+The tuned embedder alone gains +0.26 recall@10 [+0.17, +0.35] over the untuned hybrid and is within 0.06 of the LLM-translation pipeline on recall@10 (difference not claimable), but orders worse (MRR 0.63 against 0.84). With a cheap reranker on top it is not distinguishable from the translation pipeline (+0.015 recall@10 [-0.05, +0.07]) at a fifth of the latency. Training used 11.5k synthetic questions (0.87 USD) and under 15 minutes on a free GPU; hard negatives did not help. The benchmark's questions were written by an LLM from the article text, so these numbers describe finding that article, not answer quality.
+
 ## Reproduce
 
 Requires [uv](https://docs.astral.sh/uv/). API keys go in `.env` (copy `.env.example`); nothing in this repository needs a key to read or to run the tests.
@@ -45,6 +60,12 @@ uv run pytest                                        # offline, uses fake model 
 # Phase 0: the corpus (downloads from Fedlex, writes data/processed/articles.parquet)
 uv run python -m fedlex_bench.chunk
 uv run python -m fedlex_bench.alignment              # DE/FR/IT alignment report
+
+# Phase 3: fine-tuning data and checks (training itself runs on a free Kaggle GPU: notebooks/README.md)
+uv sync --group finetune
+uv run python -m fedlex_bench.finetune.exclusions    # training pool: dev/test gold, neighbours, twins excluded
+uv run python -m fedlex_bench.finetune.dataset       # split by article
+uv run python -m fedlex_bench.eval report 2026-10-28_test_aec4726ef0 2026-10-28_test_ae60b9e8c1 2026-10-28_test_033e9b80b2
 
 # Phase 2: indexes and evaluation
 uv run python -m fedlex_bench.retrieval build        # embeds the corpus (CPU, about 15 minutes)
@@ -64,10 +85,12 @@ data/raw/             source downloads (not committed)
 data/processed/       aligned, chunked articles and indexes (not committed)
 benchmark/v1/         frozen benchmark (read-only); earlier folders are the Phase 1 build trail
 src/fedlex_bench/     ingest, chunk, alignment; benchmark/ (build tools); retrieval/; llm/ and answer/;
-                      agent/ (Google ADK); eval/ (metrics, judge, runner, CLI)
+                      agent/ (Google ADK); eval/ (metrics, judge, runner, CLI); finetune/ (Phase 3)
 tests/                pytest, offline
 eval/                 results, frozen test configurations, test-run log, price table, judge calibration
-finetune/             Phase 3 (empty so far)
+data/finetune/       Phase 3 training data (pool, synthetic questions, pairs, audit) and its README
+notebooks/            Kaggle fine-tuning notebook, kit builder, set-up guide
+models/               trained checkpoints (not committed)
 docs/                 plan, specs, phase reports and progress logs
 .claude/agents/       role files of the subagents used to build the project
 ```
@@ -88,6 +111,6 @@ Data: the statute texts come from Fedlex (Swiss Federal Chancellery) open data v
 
 **This is not an official publication. Only the publication by the Federal Chancellery is authoritative.** (German original: "Dies ist keine amtliche Veröffentlichung. Massgebend ist allein die Veröffentlichung durch die Bundeskanzlei.")
 
-Processing notes: article text is taken from the published Akoma Ntoso XML, with footnotes moved into a separate `footnotes` column rather than dropped. Repealed articles are kept with empty text and a flag. Article ids and chunk boundaries are derived by this project. Raw Fedlex files, the processed Parquet and the embedding indexes are not committed to this repository. The committed `eval/results/` folders hold model outputs (answers, traces, scores) and article ids, not article texts. The benchmark questions and gold facts were written by language models and only partly reviewed by a human who is not a lawyer; this is not legal advice.
+Processing notes: article text is taken from the published Akoma Ntoso XML, with footnotes moved into a separate `footnotes` column rather than dropped. Repealed articles are kept with empty text and a flag. Article ids and chunk boundaries are derived by this project. Raw Fedlex files, the processed Parquet and the embedding indexes are not committed to this repository. The committed `eval/results/` folders hold model outputs (answers, traces, scores) and article ids, not article texts. The benchmark questions and gold facts were written by language models and only partly reviewed by a human who is not a lawyer; this is not legal advice. The committed Phase 3 training questions (`data/finetune/`) are also model-written, contain no article text, and were audited by a second model family only; nobody who reads German, French and Italian reviewed them.
 
 The Swiss Case Law Open Dataset on Hugging Face (CC0) was checked and contains court decisions only, so it is not used for statutes.
