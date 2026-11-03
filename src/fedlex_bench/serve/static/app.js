@@ -39,6 +39,9 @@
         col.appendChild(el("p", "missing", hit.is_repealed ? "Repealed: no current text." : "No text in this language."));
       }
       var url = safeHttps(hit.source_urls && hit.source_urls[lang]);
+      if (hit.truncated_langs && hit.truncated_langs.indexOf(lang) !== -1) {
+        col.appendChild(el("p", "truncated", "Truncated: this text is cut here. Read the full text at Fedlex."));
+      }
       if (url) {
         var a = el("a", null, "Fedlex source (" + pair[1] + ")");
         a.href = url;

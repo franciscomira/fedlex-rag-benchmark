@@ -71,7 +71,8 @@ Nothing here has been done yet, and nothing in the repository creates an account
    ---
    ```
 4. Commit and push to the Space. The Space builds the image; follow the build log.
-5. Optional Space variables: `DEMO_RATE_PER_IP`, `DEMO_RATE_GLOBAL`, `TRUST_PROXY=1` (see below).
+5. Optional Space variables: `DEMO_RATE_PER_IP`, `DEMO_RATE_GLOBAL` (see below). The image already sets
+   `TRUST_PROXY=1`; **confirm it after deployment** (see Risks).
    To switch the demo off at once, set `DEMO_DISABLED=1`: every `/api/*` route then answers 503.
 6. Open the Space URL, run one search in each language, and check that the notices are visible.
 
@@ -84,11 +85,13 @@ To test the image locally first: `docker build -f demo/Dockerfile -t fedlex-demo
 | --- | --- | --- |
 | `PORT` | 7860 | Port to listen on. |
 | `DEMO_RATE_PER_IP` | 30 | Requests per minute per client address. |
-| `DEMO_RATE_GLOBAL` | 600 | Requests per minute for the whole service. |
+| `DEMO_RATE_GLOBAL` | 120 | Requests per minute for the whole service. Not measured on real hardware: watch the Space and tune it. |
 | `DEMO_MAX_BODY_BYTES` | 8192 | Largest accepted JSON body. |
 | `DEMO_MAX_CONCURRENT` | 2 | Searches running at once. |
+| `DEMO_MAX_K` | 10 | Most articles one search returns. |
+| `DEMO_MAX_TEXT_CHARS` | 6000 | Longest article text sent per language. Longer texts are cut (a plain prefix) and flagged `truncated` in the JSON and on the page, with a pointer to the full text at Fedlex. |
 | `DEMO_DISABLED` | off | `1` returns 503 on `/api/*`. |
-| `TRUST_PROXY` | off | `1` counts rate limits by the last `X-Forwarded-For` entry (the one the proxy added). Turn on only behind a proxy that sets it; otherwise everyone looks like one address. |
+| `TRUST_PROXY` | off in the app, **on (`1`) in `demo/Dockerfile`** | `1` counts rate limits by the last `X-Forwarded-For` entry (the one the proxy added), and only if it is a valid IP address; otherwise the connection address is used. Off, everyone behind a proxy looks like one address and 30/min becomes site-wide. |
 | `DEMO_EXAMPLES` | `demo/examples.json` | Another examples file. |
 
 Rate limits are kept in memory per process: they reset on restart and are not shared between
@@ -114,8 +117,17 @@ replicas. Questions are never logged or stored; uvicorn access logging is off.
   memory; if the app is killed at start-up, check the memory in the logs.
 - **Offline at run time.** The image sets `HF_HUB_OFFLINE=1` after the build downloaded the pinned model
   revision. If the model lookup fails at run time, remove that line and rebuild.
-- **Abuse.** Limits are modest and in memory. Behind the Space proxy all visitors may appear as one
-  address unless `TRUST_PROXY=1` is set; with it off, the global limit still protects the service
-  but one heavy user can use it up for everyone.
+- **Abuse, and `TRUST_PROXY=1` must be confirmed after deployment.** Limits are modest and in
+  memory. The Dockerfile sets `TRUST_PROXY=1` because a Hugging Face Space sits behind a proxy that
+  sets `X-Forwarded-For`; without it all visitors share one per-address limit. This is an
+  assumption about the platform that has not been checked. After deploying, send a few requests with
+  different forged `X-Forwarded-For` values and check that you are still limited per real address
+  (the header must be rewritten or appended to by the proxy, so its last entry is the real client). If a
+  client can reach the app directly, bypassing the proxy, it can forge the header and dodge the
+  per-address limit; the global limit still holds. If in doubt, set `TRUST_PROXY=0` and accept a site-wide limit.
+- **Base images are pinned by digest** (python:3.12-slim and uv 0.13.1, looked up on 2026-11-03).
+  The digests are a snapshot: they stop receiving security fixes until you refresh them on purpose.
+  The Dockerfile has not been built, so the pins are untested too.
+- **Raw Fedlex XML** is downloaded, used and deleted inside one `RUN` step, so it is not in any image layer.
 - **Not legal advice, not official.** The page shows these notices from `serve/notices.py`.
   Keep them if you change the page.

@@ -165,7 +165,7 @@ def test_search_returns_hits_and_notice(client):
     assert body["source_note"] == notices.SOURCE_NOTE
 
 
-def test_k_is_capped_at_twenty_and_floored_at_one(pipe, tmp_path):
+def test_k_is_capped_at_ten_and_floored_at_one(pipe, tmp_path):
     seen = []
     real = pipe.search
     pipe.search = lambda q, k=10: (seen.append(k), real(q, k))[1]
@@ -173,7 +173,10 @@ def test_k_is_capped_at_twenty_and_floored_at_one(pipe, tmp_path):
     assert post(c, k=500).status_code == 200
     assert post(c, k=0).status_code == 200
     assert post(c).status_code == 200
-    assert seen == [20, 1, 10]
+    assert seen == [10, 1, 10]
+    seen.clear()
+    assert post(make_client(pipe, tmp_path, max_k=3), k=9).status_code == 200
+    assert seen == [3]  # the cap is configurable
 
 
 @pytest.mark.parametrize(
@@ -328,6 +331,74 @@ def test_trusted_proxy_uses_the_last_entry(pipe, tmp_path):
     assert go("2.2.2.2, 10.0.0.9") == 429
 
 
+@pytest.mark.parametrize(
+    "header", ["evil<script>", "999.1.1.1", "1.2.3.4:5678", "unknown", "a" * 5000, ", ,"]
+)
+def test_invalid_forwarded_for_falls_back_to_the_peer_address(pipe, tmp_path, header):
+    c = make_client(pipe, tmp_path, ip_limit=1, global_limit=100, trust_proxy=True)
+    codes = [
+        c.post("/api/search", json={"q": "a"}, headers={"X-Forwarded-For": header}).status_code
+        for _ in range(2)
+    ]
+    assert codes == [200, 429]  # counted under the peer address, not under the header text
+    middleware = next(m for m in c.app.user_middleware)
+    keys = list(middleware.kwargs["per_ip"]._events)
+    assert keys == ["203.0.113.5"]
+
+
+def test_forwarded_ipv6_is_normalised(pipe, tmp_path):
+    c = make_client(pipe, tmp_path, ip_limit=1, global_limit=100, trust_proxy=True)
+
+    def go(xff):
+        return c.post("/api/search", json={"q": "a"}, headers={"X-Forwarded-For": xff}).status_code
+
+    assert go("2001:DB8:0:0:0:0:0:1") == 200
+    assert go("2001:db8::1") == 429  # the same address written differently
+
+
+def test_deeply_nested_json_is_a_normal_400(pipe, tmp_path):
+    c = make_client(pipe, tmp_path, max_body_bytes=1_000_000)
+    body = b"[" * 100_000 + b"]" * 100_000
+    r = c.post("/api/search", content=body)
+    assert r.status_code == 400
+    assert LEGAL in r.json()["notice"]
+    assert r.headers["x-frame-options"] == "DENY"
+    assert "content-security-policy" in r.headers
+    assert post(c).status_code == 200  # the app is still fine
+
+
+def test_long_texts_are_cut_and_flagged_nothing_else_changes(pipe, tmp_path):
+    c = make_client(pipe, tmp_path, max_text_chars=20)
+    hit = post(c, "Mietzins", k=1).json()["hits"][0]
+    full = pipe.get_article("220:1").texts
+    assert hit["truncated"] is True and hit["truncated_langs"] == ["de", "fr", "it"]
+    for lang, text in hit["texts"].items():
+        assert text == full[lang][:20]  # a plain prefix, no ellipsis added
+    assert hit["titles"] == pipe.get_article("220:1").titles
+    art = c.get("/api/article/220:1").json()["article"]
+    assert art["truncated"] is True and art["texts"]["fr"] == full["fr"][:20]
+
+    roomy = make_client(pipe, tmp_path)  # default 6000 characters
+    hit = post(roomy, "Mietzins", k=1).json()["hits"][0]
+    assert hit["truncated"] is False and hit["truncated_langs"] == []
+    assert hit["texts"] == full  # untouched
+
+
+def test_the_page_script_shows_the_truncation_note():
+    js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    assert "truncated_langs" in js and "Read the full text at Fedlex" in js
+
+
+def test_dockerfile_keeps_raw_xml_out_of_layers_and_trusts_the_space_proxy():
+    text = (Path(web_mod.DEFAULT_EXAMPLES).parent / "Dockerfile").read_text(encoding="utf-8")
+    runs = [r for r in re.split(r"\n(?=[A-Z]+ )", text) if r.startswith("RUN")]
+    step = next(r for r in runs if "fedlex_bench.chunk" in r)
+    assert "rm -rf data/raw" in step and "serve.web --warm" in step
+    assert not any("rm -rf data/raw" in r for r in runs if r is not step)
+    assert "TRUST_PROXY=1" in text
+    assert re.search(r"FROM python:[\w.-]+@sha256:[0-9a-f]{64}", text)
+
+
 def test_healthz_and_page_are_not_rate_limited(pipe, tmp_path):
     c = make_client(pipe, tmp_path, ip_limit=1, global_limit=1)
     for _ in range(5):
@@ -348,15 +419,44 @@ def test_sliding_window_limiter_unit():
     assert lim.retry_after("a") == 0  # the first event left the window
 
 
-def test_limiter_forgets_quiet_keys():
+def test_limiter_checks_do_not_add_keys():
+    lim = SlidingWindowLimiter(1, 10.0, Clock())
+    for i in range(1000):
+        assert lim.retry_after(f"ip{i}") == 0  # a check alone (e.g. a rejected request) is free
+    assert len(lim._events) == 0
+
+
+def test_limiter_sweeps_quiet_keys_periodically():
     clock = Clock()
     lim = SlidingWindowLimiter(5, 10.0, clock)
-    lim._SWEEP_AT = 50
     for i in range(60):
         lim.record(f"ip{i}")
     clock.now += 100
-    lim.record("late")
-    assert len(lim._events) < 10
+    lim.record("late")  # more than a window since the last sweep
+    assert list(lim._events) == ["late"]
+
+
+def test_limiter_has_a_hard_cap_and_evicts_the_least_recently_used():
+    lim = SlidingWindowLimiter(5, 1000.0, Clock(), max_keys=3)
+    for key in ("a", "b", "c"):
+        lim.record(key)
+    lim.record("a")  # a is now the most recent
+    lim.record("d")  # over the cap: b, the oldest, goes
+    assert list(lim._events) == ["c", "a", "d"]
+    for i in range(500):
+        lim.record(f"x{i}")
+    assert len(lim._events) == 3
+
+
+def test_blocked_flood_from_many_addresses_adds_no_state(pipe, tmp_path):
+    c = make_client(pipe, tmp_path, global_limit=1, ip_limit=100, trust_proxy=True)
+    assert c.post("/api/search", json={"q": "a"}, headers={"X-Forwarded-For": "10.0.0.1"}
+                  ).status_code == 200
+    for i in range(50):
+        r = c.post("/api/search", json={"q": "a"}, headers={"X-Forwarded-For": f"10.1.0.{i}"})
+        assert r.status_code == 429
+    middleware = next(m for m in c.app.user_middleware)
+    assert len(middleware.kwargs["per_ip"]._events) == 1  # only the one admitted address
 
 
 # ----- size caps -----
@@ -455,9 +555,12 @@ def test_config_from_env():
     cfg = DemoConfig.from_env(
         {"DEMO_RATE_PER_IP": "5", "DEMO_DISABLED": "1", "TRUST_PROXY": "true"}
     )
-    assert (cfg.ip_limit, cfg.global_limit, cfg.disabled, cfg.trust_proxy) == (5, 600, True, True)
+    assert (cfg.ip_limit, cfg.global_limit, cfg.disabled, cfg.trust_proxy) == (5, 120, True, True)
     default = DemoConfig.from_env({})
-    assert (default.ip_limit, default.global_limit, default.disabled) == (30, 600, False)
+    assert (default.ip_limit, default.global_limit, default.disabled) == (30, 120, False)
+    assert (default.max_k, default.max_text_chars) == (10, 6000)
+    tuned = DemoConfig.from_env({"DEMO_MAX_K": "4", "DEMO_MAX_TEXT_CHARS": "100"})
+    assert (tuned.max_k, tuned.max_text_chars) == (4, 100)
     assert default.trust_proxy is False
     with pytest.raises(ValueError):
         DemoConfig.from_env({"DEMO_RATE_PER_IP": "0"})

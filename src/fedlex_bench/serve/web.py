@@ -24,8 +24,9 @@ Abuse protection (all in memory, so it resets on restart and is per process)
 - Security headers on every response.
 
 Settings come from the environment (see `DemoConfig.from_env`):
-DEMO_RATE_PER_IP (30/min), DEMO_RATE_GLOBAL (600/min), DEMO_MAX_BODY_BYTES (8192),
-DEMO_MAX_CONCURRENT (2), DEMO_DISABLED, TRUST_PROXY, DEMO_EXAMPLES, PORT.
+DEMO_RATE_PER_IP (30/min), DEMO_RATE_GLOBAL (120/min), DEMO_MAX_BODY_BYTES (8192),
+DEMO_MAX_CONCURRENT (2), DEMO_MAX_K (10), DEMO_MAX_TEXT_CHARS (6000), DEMO_DISABLED,
+TRUST_PROXY, DEMO_EXAMPLES, PORT.
 """
 
 from __future__ import annotations
@@ -33,11 +34,12 @@ from __future__ import annotations
 import argparse
 import asyncio
 import html
+import ipaddress
 import json
 import logging
 import os
 import time
-from collections import deque
+from collections import OrderedDict, deque
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -60,7 +62,6 @@ log = logging.getLogger("fedlex_bench.serve.web")
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 DEFAULT_EXAMPLES = PROJECT_ROOT / "demo" / "examples.json"
 DEFAULT_PORT = 7860
-MAX_K = 20
 DEFAULT_K = 10
 
 # Display names for the acts, used only as labels next to SR numbers the corpus itself reports.
@@ -106,10 +107,12 @@ def _env_int(env: Mapping[str, str], name: str, default: int) -> int:
 @dataclass(frozen=True)
 class DemoConfig:
     ip_limit: int = 30  # requests per window per client address
-    global_limit: int = 600  # requests per window for the whole service
+    global_limit: int = 120  # requests per window for the whole service (not measured; tune it)
     window_s: float = 60.0
     max_body_bytes: int = 8192  # 1000 characters escaped as \uXXXX is about 6000 bytes
     max_concurrent: int = 2  # searches running at the same time (CPU protection)
+    max_k: int = 10  # most articles one search may return
+    max_text_chars: int = 6000  # longest article text sent per language (longer ones are cut)
     disabled: bool = False  # kill switch
     trust_proxy: bool = False  # believe X-Forwarded-For (only behind a proxy you control)
 
@@ -121,6 +124,8 @@ class DemoConfig:
             global_limit=_env_int(env, "DEMO_RATE_GLOBAL", cls.global_limit),
             max_body_bytes=_env_int(env, "DEMO_MAX_BODY_BYTES", cls.max_body_bytes),
             max_concurrent=_env_int(env, "DEMO_MAX_CONCURRENT", cls.max_concurrent),
+            max_k=_env_int(env, "DEMO_MAX_K", cls.max_k),
+            max_text_chars=_env_int(env, "DEMO_MAX_TEXT_CHARS", cls.max_text_chars),
             disabled=_truthy(env.get("DEMO_DISABLED")),
             trust_proxy=_truthy(env.get("TRUST_PROXY")),
         )
@@ -134,35 +139,59 @@ class DemoConfig:
 class SlidingWindowLimiter:
     """At most `limit` admitted requests per key in any `window_s` seconds (in memory)."""
 
-    _SWEEP_AT = 10_000  # when this many keys are tracked, drop the ones that went quiet
+    MAX_KEYS = 10_000  # hard cap on tracked keys; the least recently used one is dropped first
 
     def __init__(
-        self, limit: int, window_s: float, clock: Callable[[], float] = time.monotonic
+        self,
+        limit: int,
+        window_s: float,
+        clock: Callable[[], float] = time.monotonic,
+        max_keys: int | None = None,
     ) -> None:
         self.limit = limit
         self.window_s = window_s
         self._clock = clock
-        self._events: dict[str, deque[float]] = {}
+        self.max_keys = max_keys or self.MAX_KEYS
+        # Least recently admitted key first. Only admitted requests create or touch a key, so a
+        # flood of rejected requests from many addresses cannot grow this.
+        self._events: OrderedDict[str, deque[float]] = OrderedDict()
+        self._last_sweep = clock()
 
-    def _recent(self, key: str, now: float) -> deque[float]:
-        events = self._events.setdefault(key, deque())
+    def _trim(self, events: deque[float], now: float) -> None:
         while events and events[0] <= now - self.window_s:
             events.popleft()
-        return events
 
     def retry_after(self, key: str) -> float:
-        """0 if one more request is allowed now, else the seconds until a slot frees up."""
+        """0 if one more request is allowed now, else the seconds until a slot frees up.
+        Never adds a key."""
+        events = self._events.get(key)
+        if not events:
+            return 0.0
         now = self._clock()
-        events = self._recent(key, now)
+        self._trim(events, now)
         if len(events) < self.limit:
             return 0.0
         return max(events[0] + self.window_s - now, 0.001)
 
     def record(self, key: str) -> None:
         now = self._clock()
-        self._recent(key, now).append(now)
-        if len(self._events) > self._SWEEP_AT:
-            for k in [k for k in self._events if not self._recent(k, now)]:
+        events = self._events.get(key)
+        if events is None:
+            events = self._events[key] = deque()
+        self._events.move_to_end(key)
+        self._trim(events, now)
+        events.append(now)
+        if now - self._last_sweep >= self.window_s:
+            self._sweep(now)
+        while len(self._events) > self.max_keys:
+            self._events.popitem(last=False)
+
+    def _sweep(self, now: float) -> None:
+        """Drop keys with no request in the last window."""
+        self._last_sweep = now
+        for k in list(self._events):
+            self._trim(self._events[k], now)
+            if not self._events[k]:
                 del self._events[k]
 
 
@@ -382,15 +411,35 @@ async def _read_body(request: Request, cap: int) -> bytes:
 def client_address(request: Request, trust_proxy: bool) -> str:
     """The address rate limits are counted by.
 
-    With TRUST_PROXY the last X-Forwarded-For entry is used: it is the one added by the nearest
-    proxy, whereas earlier entries can be written by the client. Without it the header is
-    ignored."""
+    With TRUST_PROXY the last X-Forwarded-For entry is used (one trusted proxy in front): it is
+    the one that proxy added, whereas earlier entries can be written by the client. The entry
+    must be a valid IP address; otherwise (and without TRUST_PROXY) the connection's own address
+    is used. So the header can never put arbitrary text into the limiter."""
+    peer = request.client.host if request.client else "unknown"
     if trust_proxy:
-        forwarded = request.headers.get("x-forwarded-for", "")
-        parts = [p.strip() for p in forwarded.split(",") if p.strip()]
+        parts = [p.strip() for p in request.headers.get("x-forwarded-for", "").split(",")]
+        parts = [p for p in parts if p]
         if parts:
-            return parts[-1]
-    return request.client.host if request.client else "unknown"
+            try:
+                return str(ipaddress.ip_address(parts[-1]))
+            except ValueError:
+                pass
+    return peer
+
+
+def limit_texts(payload: dict[str, Any], max_chars: int) -> dict[str, Any]:
+    """Cut article texts longer than `max_chars` and say so in the payload.
+
+    Nothing else is changed: a text within the limit is returned exactly as it is, and a cut text
+    is a plain prefix. `truncated_langs` lists the languages that were cut; the page shows a note
+    with a link to the full text at Fedlex."""
+    texts = payload.get("texts") or {}
+    cut = sorted(lang for lang, text in texts.items() if len(text) > max_chars)
+    out = {**payload, "texts": {lang: text[:max_chars] if lang in cut else text
+                                for lang, text in texts.items()}}
+    out["truncated_langs"] = cut
+    out["truncated"] = bool(cut)
+    return out
 
 
 class GuardMiddleware(BaseHTTPMiddleware):
@@ -470,7 +519,7 @@ def create_app(
             return _json({"error": "Request body too large."}, 413)
         try:
             body = json.loads(raw)
-        except ValueError:
+        except (ValueError, RecursionError):  # bad JSON, or nested so deeply that parsing gives up
             return _json({"error": "The body must be JSON like {\"q\": \"...\"}."}, 400)
         if not isinstance(body, dict) or not isinstance(body.get("q"), str):
             return _json({"error": "Field q (the question, a string) is required."}, 400)
@@ -480,10 +529,10 @@ def create_app(
         if len(q) > MAX_QUESTION_CHARS:
             too_long = f"The question is longer than {MAX_QUESTION_CHARS} characters."
             return _json({"error": too_long}, 400)
-        k = body.get("k", DEFAULT_K)
+        k = body.get("k", min(DEFAULT_K, cfg.max_k))
         if isinstance(k, bool) or not isinstance(k, int):
             return _json({"error": "Field k must be a whole number."}, 400)
-        k = max(1, min(k, MAX_K))
+        k = max(1, min(k, cfg.max_k))
         try:
             async with slots:
                 hits = await run_in_threadpool(pipeline.search, q, k)
@@ -492,7 +541,7 @@ def create_app(
         except Exception as exc:  # never print the question or the exception text
             log.error("search failed (%s)", type(exc).__name__)
             return _json({"error": "Search failed. Please try again later."}, 500)
-        return _json({"hits": [h.to_dict() for h in hits]})
+        return _json({"hits": [limit_texts(h.to_dict(), cfg.max_text_chars) for h in hits]})
 
     async def article(request: Request) -> Response:
         article_id = request.path_params["article_id"]
@@ -503,7 +552,7 @@ def create_app(
             return _json({"error": "Lookup failed. Please try again later."}, 500)
         if hit is None:
             return _json({"error": "Unknown article id."}, 404)
-        return _json({"article": hit.to_dict()})
+        return _json({"article": limit_texts(hit.to_dict(), cfg.max_text_chars)})
 
     async def not_found(request: Request, exc: Exception) -> Response:
         if request.url.path.startswith("/api/"):

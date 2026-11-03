@@ -120,6 +120,7 @@ button#go:disabled { opacity: 0.6; cursor: progress; }
 .lang-col h3 { margin: 0 0 4px; font-size: 1rem; }
 .lang-col .lang-title { font-weight: 600; margin: 0 0 6px; }
 .lang-col .text { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0 0 8px; }
+.lang-col .truncated { color: var(--warn); font-weight: 600; margin: 0 0 8px; }
 .lang-col .missing { color: var(--muted); font-style: italic; }
 @media (max-width: 760px) {
   .langs { grid-template-columns: 1fr; }
