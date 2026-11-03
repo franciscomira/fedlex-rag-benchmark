@@ -143,3 +143,26 @@ def test_real_int8_file_matches_digest():
     if not (LOCAL_MODEL_DIR / INT8_FILE).exists():
         pytest.skip("local int8 export not present")
     check_model_digest(OnnxE5Embedder(local_dir=LOCAL_MODEL_DIR, onnx_file=INT8_FILE))
+
+
+def test_concurrent_first_calls_build_once(tmp_path):
+    import threading
+
+    embedder = FakeEmbedder()
+    pipe = ServingPipeline(
+        articles=make_articles(), embedder=embedder, index_dir=tmp_path, llm=FakeClient(llm_reply)
+    )
+    errors = []
+
+    def go():
+        try:
+            pipe.search("Mietzins", k=2)
+        except Exception as exc:  # pragma: no cover
+            errors.append(exc)
+
+    threads = [threading.Thread(target=go) for _ in range(8)]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    assert not errors
+    n_passages = len(pipe.env.index("article", "all").chunks)
+    assert embedder.passage_calls == n_passages  # the index matrix was embedded exactly once

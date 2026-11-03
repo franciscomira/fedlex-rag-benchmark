@@ -12,6 +12,7 @@ and the citations come from the corpus and from code; the model only ranks and d
 from __future__ import annotations
 
 import os
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -173,59 +174,68 @@ class ServingPipeline:
         self._env: RetrievalEnv | None = None
         self._corpus: Corpus | None = None
         self._system: PipelineSystem | None = None
+        self._warm = False
+        self._lock = threading.RLock()  # lazy builds run once even with concurrent first calls
 
     @property
     def env(self) -> RetrievalEnv:
-        if self._env is None:
-            embedder = self._embedder
-            if embedder is None:
-                model_dir = self._model_dir or resolve_model_dir()
-                embedder = OnnxE5Embedder(local_dir=model_dir, onnx_file=INT8_FILE)
-                check_model_digest(embedder)
-            articles = (
-                pd.read_parquet(ARTICLES_PARQUET) if self._articles is None else self._articles
-            )
-            self._env = RetrievalEnv(
-                articles=articles, embedder=embedder, cache_dir=self._index_dir
-            )
-            self._articles = articles
-        return self._env
+        with self._lock:
+            if self._env is None:
+                self._build_env()
+            return self._env
+
+    def _build_env(self) -> None:
+        embedder = self._embedder
+        if embedder is None:
+            model_dir = self._model_dir or resolve_model_dir()
+            embedder = OnnxE5Embedder(local_dir=model_dir, onnx_file=INT8_FILE)
+            check_model_digest(embedder)
+        articles = pd.read_parquet(ARTICLES_PARQUET) if self._articles is None else self._articles
+        self._env = RetrievalEnv(articles=articles, embedder=embedder, cache_dir=self._index_dir)
+        self._articles = articles
 
     @property
     def corpus(self) -> Corpus:
-        if self._corpus is None:
-            _ = self.env
-            self._corpus = Corpus(self._articles)
-        return self._corpus
+        with self._lock:
+            if self._corpus is None:
+                _ = self.env
+                self._corpus = Corpus(self._articles)
+            return self._corpus
 
     @property
     def retriever(self):
-        return self.env.retriever("embedding", "all_lang", "article")
+        with self._lock:
+            if not self._warm:  # build the index matrix once, before concurrent searches
+                _ = self.env.index("article", "all").matrix
+                self._warm = True
+            return self.env.retriever("embedding", "all_lang", "article")
 
     def _llm_client(self) -> LLMClient:
-        if self._llm is None:
-            from fedlex_bench.llm import build_client
+        with self._lock:
+            if self._llm is None:
+                from fedlex_bench.llm import build_client
 
-            self._llm = build_client(LLM_MODEL)
-        return self._llm
+                self._llm = build_client(LLM_MODEL)
+            return self._llm
 
     @property
     def system(self) -> PipelineSystem:
         """The frozen P2 system: tuned int8 retrieval, Haiku rerank, cited answer."""
-        if self._system is None:
-            from fedlex_bench.answer import LLMAnswerer
-            from fedlex_bench.llm import LLMReranker
+        with self._lock:
+            if self._system is None:
+                from fedlex_bench.answer import LLMAnswerer
+                from fedlex_bench.llm import LLMReranker
 
-            client = self._llm_client()
-            self._system = PipelineSystem(
-                self.retriever,
-                reranker=LLMReranker(client, max_candidates=RERANK_K),
-                answerer=LLMAnswerer(client),
-                retrieve_k=RETRIEVE_K,
-                rerank_k=RERANK_K,
-                answer_articles=ANSWER_ARTICLES,
-            )
-        return self._system
+                client = self._llm_client()
+                self._system = PipelineSystem(
+                    self.retriever,
+                    reranker=LLMReranker(client, max_candidates=RERANK_K),
+                    answerer=LLMAnswerer(client),
+                    retrieve_k=RETRIEVE_K,
+                    rerank_k=RERANK_K,
+                    answer_articles=ANSWER_ARTICLES,
+                )
+            return self._system
 
     def search(self, query: str, k: int = 10) -> list[ArticleHit]:
         """Tuned embedder only: no LLM, no cost. Articles ranked by their best passage."""
