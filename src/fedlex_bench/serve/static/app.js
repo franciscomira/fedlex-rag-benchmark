@@ -107,6 +107,14 @@
     box.addEventListener("input", function () {
       counter.textContent = box.value.length + " / " + maxChars;
     });
+    // Enter searches; Shift+Enter adds a line break.
+    box.addEventListener("keydown", function (event) {
+      if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+        event.preventDefault();
+        if (form.requestSubmit) form.requestSubmit();
+        else form.dispatchEvent(new Event("submit", { cancelable: true }));
+      }
+    });
   }
 
   if (form) {
