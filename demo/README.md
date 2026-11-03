@@ -56,7 +56,11 @@ added tax, naturalisation) are out of scope on purpose and should be refused.
 
 ## Deploy as a Hugging Face Docker Space (manual steps)
 
-Nothing here has been done yet, and nothing in the repository creates an account, a Space or a remote.
+**Not done, and not possible for free (checked 2026-11-03).** Hugging Face refused to create the Space
+(`402 Payment Required`: Docker and Gradio Spaces on free CPU need a PRO subscription, about 9 USD a month;
+only static Spaces are free). The steps below are kept for anyone who has a plan or another host; the
+image itself builds and runs (see Status). The public side of this project is therefore a static page
+of recorded examples, and this search demo is run locally.
 
 1. Create a Space on huggingface.co: SDK **Docker**, hardware **CPU basic** (free).
 2. Clone the Space repository. Copy into it the files tracked by this project (not `data/raw`,

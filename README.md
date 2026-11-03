@@ -19,7 +19,7 @@ Swiss federal law (Fedlex) is published officially in German, French and Italian
 | 1 Benchmark | done: `benchmark/v1`, 242 items (150 answerable questions + 20 traps, plus 72 translations). [Report](docs/phase1_report.md), spec [benchmark_spec.md](docs/benchmark_spec.md) |
 | 2 Baseline harness, providers, agent | done: hybrid retrieval, LLM reranker, three providers, ADK agent, evaluation harness. [Report](docs/phase2_report.md), spec [eval_spec.md](docs/eval_spec.md) |
 | 3 Fine-tuning | done: a fine-tuned multilingual-e5-small reaches test recall@10 0.81 with no LLM call; retrieval only. [Report](docs/phase3_report.md), [data](data/finetune/README.md), model: [franciscomira/fedlex-e5-small on Hugging Face](https://huggingface.co/franciscomira/fedlex-e5-small) ([model card source](docs/model_card.md)). Found and corrected an embedder bug that affected the Phase 2 retrieval numbers: see the errata in the [Phase 2 report](docs/phase2_report.md) |
-| 4 Ship | measured and built, not yet published: the int8 model and the full pipeline were run once each on test (below); a retrieval-only demo app, an MCP server and a static results page are in the repository. Log: [phase4_progress.md](docs/phase4_progress.md) |
+| 4 Ship | done except the write-up: the int8 model and the full pipeline were run once each on test (below); [results page](https://franciscomira.github.io/fedlex-rag-benchmark/) live; MCP server and a local retrieval-only demo in the repository; no live demo (see below). Log: [phase4_progress.md](docs/phase4_progress.md) |
 | 5 Write-up | planned. [Project plan](docs/PROJECT_PLAN.md) |
 
 ### Phase 2 results in one table
@@ -64,8 +64,8 @@ P2 and P3 are not distinguishable on recall@10, fact recall or faithfulness (fac
 
 ### Demo, MCP server, results page
 
-- **Results page:** `uv run python -m fedlex_bench.site build` writes `site/index.html` from the committed run folders (every number is read from the harness output). Publishing it is a separate step; see [results_page_notes.md](docs/results_page_notes.md).
-- **Demo app:** `uv run --group serve python -m fedlex_bench.serve.web` serves a retrieval-only search (no LLM, no key, no stored questions) with the three-language texts, plus recorded full-pipeline examples. A public deployment is described in [demo/README.md](demo/README.md) and is not live yet.
+- **Results page:** `uv run python -m fedlex_bench.site build` writes `site/index.html` from the committed run folders (every number is read from the harness output). Published at <https://franciscomira.github.io/fedlex-rag-benchmark/> by a GitHub Actions workflow; see [results_page_notes.md](docs/results_page_notes.md).
+- **Demo app (local):** `uv run --group serve python -m fedlex_bench.serve.web` serves a retrieval-only search (no LLM, no key, no stored questions) with the three-language texts, plus recorded full-pipeline examples. There is **no live public demo**: Hugging Face only hosts Docker Spaces on a paid plan, and a free host with enough memory was not found. A Docker image of the demo builds and runs ([demo/README.md](demo/README.md)). Ten recorded full-pipeline answers are on the [results site](https://franciscomira.github.io/fedlex-rag-benchmark/examples.html).
 - **MCP server:** `uv run --group serve python -m fedlex_bench.serve.mcp_server` (tools `list_acts`, `search_articles`, `get_article`, `answer_with_citations`). Several Fedlex MCP servers exist. What this one adds: retrieval measured on a benchmark with intervals, citations validated by code, the article text in three languages side by side. What it does not: it covers 8 federal acts, not all of Fedlex, and it is not an official source. See [docs/mcp.md](docs/mcp.md).
 
 ## Reproduce
