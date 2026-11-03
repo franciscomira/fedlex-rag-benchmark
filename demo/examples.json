@@ -1,1 +1,236 @@
-{"examples": []}
+{
+  "recorded_at": "2026-11-03",
+  "model": "claude-haiku-5-5",
+  "embedder_revision": "786ca378bae0b6e6b8e32be6eaae2df517693118",
+  "total_cost_usd": 0.021653,
+  "examples": [
+    {
+      "lang": "en",
+      "question": "Can a landlord terminate a residential lease without giving a reason?",
+      "expected_status": "answered",
+      "status": "refused",
+      "answer": "The provided sources do not say whether a landlord must give a reason to terminate a residential lease. They list grounds on which a landlord's termination can be contested (Art. 271a CO), but they do not state whether termination without a reason is permitted or valid. They also state that a landlord's notice must be in writing and made on a form approved by the canton, which must explain how the tenant can contest the notice or request an extension (Art. 266l CO). The sources do not cover the consequences of a termination that lacks a reason.",
+      "citations": [],
+      "pointers": [
+        "220:271a",
+        "220:266l"
+      ],
+      "top_ranked": [
+        "220:271a",
+        "220:266l",
+        "220:257f",
+        "220:285",
+        "220:272a"
+      ],
+      "n_invalid_ids": 0,
+      "parse_failed": false,
+      "cost_usd": 0.002669,
+      "latency_s": 13.02
+    },
+    {
+      "lang": "en",
+      "question": "What notice period applies when an employer ends an open-ended employment contract after the probation period?",
+      "expected_status": "answered",
+      "status": "answered",
+      "answer": "After the probation period, when the employer terminates an open-ended employment contract, the notice period is one month in the first year of service, two months from the second to the ninth year of service, and three months from the tenth year onward. Notice must be given to take effect at the end of a month. These periods may be changed by written agreement, standard employment contract or collective employment contract, but they may be reduced below one month only by collective employment contract and only for the first year of service. If the employee is entitled to parental leave of the other parent before the employment ends, the notice period is extended by the number of unused leave days.",
+      "citations": [
+        "220:335c"
+      ],
+      "pointers": [],
+      "top_ranked": [
+        "220:335c",
+        "220:335b",
+        "220:335a",
+        "220:337c",
+        "220:336d"
+      ],
+      "n_invalid_ids": 0,
+      "parse_failed": false,
+      "cost_usd": 0.002169,
+      "latency_s": 2.58
+    },
+    {
+      "lang": "en",
+      "question": "How quickly must a buyer inspect the goods and tell the seller about defects?",
+      "expected_status": "answered",
+      "status": "answered",
+      "answer": "Under the general sales rules, the buyer must inspect the goods as soon as this is feasible in the ordinary course of business, and if defects for which the seller is liable are found, must notify the seller immediately. If the buyer fails to do so, the goods are deemed accepted, except for defects that were not recognisable on customary inspection. Defects discovered later must be notified immediately after discovery, otherwise the goods are deemed accepted as to those defects too.\n\nWhere the goods are built into an immovable work and their defects cause the work to be defective, or for defects not recognisable on customary inspection in that case, notice must be given within 60 days; agreeing to shorter periods is void. For the sale of land (immovable property), the period for notice of defects is 60 days, and defects not recognisable on customary inspection must be notified within 60 days of discovery; shorter agreed periods are void.\n\nThe passages do not give a fixed number of days for ordinary (movable) goods; that is governed by the 'as soon as feasible' and 'immediately' standards.",
+      "citations": [
+        "220:201",
+        "220:219a"
+      ],
+      "pointers": [],
+      "top_ranked": [
+        "220:201",
+        "220:219a",
+        "220:367",
+        "220:370",
+        "220:204"
+      ],
+      "n_invalid_ids": 0,
+      "parse_failed": false,
+      "cost_usd": 0.002899,
+      "latency_s": 6.5
+    },
+    {
+      "lang": "de",
+      "question": "Darf der Vermieter den Mietzins während des Mietverhältnisses einseitig erhöhen?",
+      "expected_status": "answered",
+      "status": "answered",
+      "answer": "Ja, aber nur eingeschränkt: Der Vermieter kann den Mietzins jederzeit auf den nächstmöglichen Kündigungstermin erhöhen. Er muss die Erhöhung mindestens zehn Tage vor Beginn der Kündigungsfrist auf einem vom Kanton genehmigten Formular mitteilen und begründen. Fehlt das vorgeschriebene Formular oder die Begründung, oder wird mit der Mitteilung die Kündigung angedroht oder ausgesprochen, ist die Erhöhung nichtig. Dasselbe gilt für andere einseitige Vertragsänderungen zu Lasten des Mieters, etwa die Verminderung von Leistungen oder die Einführung neuer Nebenkosten. Der Mieter kann eine Erhöhung innert 30 Tagen nach Mitteilung bei der Schlichtungsbehörde als missbräuchlich anfechten. Zudem kann er während der Mietdauer eine Herabsetzung verlangen, wenn der Vermieter aufgrund einer wesentlichen Änderung der Berechnungsgrundlagen einen übersetzten Ertrag erzielt; dafür muss er das Begehren zuerst schriftlich beim Vermieter stellen. Mietzinse sind in der Regel nicht missbräuchlich, wenn sie unter anderem im orts- oder quartierüblichen Rahmen liegen oder durch Kostensteigerungen oder Mehrleistungen begründet sind.",
+      "citations": [
+        "220:269d",
+        "220:270b",
+        "220:270a",
+        "220:269a"
+      ],
+      "pointers": [],
+      "top_ranked": [
+        "220:269d",
+        "220:270b",
+        "220:270a",
+        "220:270",
+        "220:269a"
+      ],
+      "n_invalid_ids": 0,
+      "parse_failed": false,
+      "cost_usd": 0.002255,
+      "latency_s": 3.57
+    },
+    {
+      "lang": "de",
+      "question": "Wann haftet der Verkäufer für Mängel der verkauften Sache?",
+      "expected_status": "answered",
+      "status": "answered",
+      "answer": "Der Verkäufer haftet dem Käufer für zugesicherte Eigenschaften sowie dafür, dass die Sache keine körperlichen oder rechtlichen Mängel aufweist, die ihren Wert oder ihre Tauglichkeit zum vorausgesetzten Gebrauch aufheben oder erheblich mindern. Er haftet auch dann, wenn er die Mängel nicht gekannt hat (Art. 197 OR). Ausgenommen sind Mängel, die der Käufer zur Zeit des Kaufes kannte (Art. 200 Abs. 1 OR). Für Mängel, die der Käufer bei gewöhnlicher Aufmerksamkeit hätte kennen sollen, haftet der Verkäufer nur, wenn er deren Nichtvorhandensein zugesichert hat (Art. 200 Abs. 2 OR). Voraussetzung für die Geltendmachung ist, dass der Käufer die Sache prüft und offensichtliche Mängel sofort anzeigt; andernfalls gilt die Sache als genehmigt (Art. 201 OR). Die Gewährleistungsklage verjährt grundsätzlich zwei Jahre nach Ablieferung der Sache, bei Integration in ein unbewegliches Werk, das dadurch mangelhaft wird, fünf Jahre (Art. 210 Abs. 1 und 2 OR).",
+      "citations": [
+        "220:197",
+        "220:200",
+        "220:201",
+        "220:210"
+      ],
+      "pointers": [],
+      "top_ranked": [
+        "220:197",
+        "220:200",
+        "220:210",
+        "220:201",
+        "220:370"
+      ],
+      "n_invalid_ids": 0,
+      "parse_failed": false,
+      "cost_usd": 0.002431,
+      "latency_s": 3.57
+    },
+    {
+      "lang": "de",
+      "question": "Wie hoch ist der Mehrwertsteuersatz auf Lebensmitteln in der Schweiz?",
+      "expected_status": "refused",
+      "status": "refused",
+      "answer": "Die Quellen enthalten keine Angaben zum Mehrwertsteuersatz auf Lebensmitteln. Die Frage kann anhand der bereitgestellten Passagen nicht beantwortet werden.",
+      "citations": [],
+      "pointers": [],
+      "top_ranked": [
+        "221.214.1:14",
+        "220:632",
+        "210:794",
+        "220:661",
+        "210:210"
+      ],
+      "n_invalid_ids": 0,
+      "parse_failed": false,
+      "cost_usd": 0.001515,
+      "latency_s": 2.68
+    },
+    {
+      "lang": "fr",
+      "question": "Quel est le délai de congé d'un contrat de travail de durée indéterminée pendant la première année de service ?",
+      "expected_status": "answered",
+      "status": "answered",
+      "answer": "Selon l'art. 335c al. 1 CO, après le temps d'essai, le contrat de durée indéterminée peut être résilié pour la fin d'un mois moyennant un délai de congé d'un mois pendant la première année de service. Ce délai peut être modifié par accord écrit, contrat-type de travail ou convention collective, mais un délai inférieur à un mois ne peut être fixé que par convention collective et seulement pour la première année de service.",
+      "citations": [
+        "220:335c"
+      ],
+      "pointers": [
+        "220:335b"
+      ],
+      "top_ranked": [
+        "220:335c",
+        "220:418q",
+        "220:335a",
+        "220:334",
+        "220:335b"
+      ],
+      "n_invalid_ids": 0,
+      "parse_failed": false,
+      "cost_usd": 0.002447,
+      "latency_s": 2.34
+    },
+    {
+      "lang": "fr",
+      "question": "Le locataire peut-il sous-louer son appartement sans l'accord du bailleur ?",
+      "expected_status": "answered",
+      "status": "answered",
+      "answer": "Non. Selon l'art. 262 al. 1 CO, le locataire ne peut sous-louer tout ou partie de la chose qu'avec le consentement du bailleur. Le bailleur ne peut refuser ce consentement que dans les cas énumérés à l'art. 262 al. 2 CO : si le locataire refuse de lui communiquer les conditions de la sous-location, si ces conditions sont abusives par rapport à celles du bail principal, ou si la sous-location présente pour le bailleur des inconvénients majeurs. Le locataire répond envers le bailleur de l'usage que le sous-locataire fait de la chose (art. 262 al. 3 CO).",
+      "citations": [
+        "220:262"
+      ],
+      "pointers": [],
+      "top_ranked": [
+        "220:262",
+        "220:291",
+        "220:273b",
+        "220:285",
+        "220:257f"
+      ],
+      "n_invalid_ids": 0,
+      "parse_failed": false,
+      "cost_usd": 0.002192,
+      "latency_s": 3.12
+    },
+    {
+      "lang": "it",
+      "question": "Quale forma è richiesta per un contratto di fideiussione?",
+      "expected_status": "answered",
+      "status": "answered",
+      "answer": "Per la validità della fideiussione è richiesta la dichiarazione scritta del fideiussore con l'indicazione numerica, nell'atto stesso, dell'importo massimo della somma garantita. Se il fideiussore è una persona fisica, la dichiarazione richiede inoltre l'atto pubblico secondo le norme del luogo in cui è fatta; se però la somma garantita non supera i duemila franchi, basta che l'indicazione numerica dell'importo e, se del caso, quella del carattere solidale siano scritte di propria mano dal fideiussore nell'atto stesso. Per le fideiussioni verso la Confederazione, i suoi istituti di diritto pubblico o un Cantone, per obbligazioni di diritto pubblico (dazi, imposte, altre tasse o prezzi di trasporto), bastano in ogni caso la dichiarazione scritta e l'indicazione numerica dell'importo massimo. Anche la procura speciale per prestare fideiussione e la promessa di prestarla richiedono la stessa forma.",
+      "citations": [
+        "220:493"
+      ],
+      "pointers": [],
+      "top_ranked": [
+        "220:493",
+        "220:12",
+        "220:13",
+        "220:11",
+        "220:16"
+      ],
+      "n_invalid_ids": 0,
+      "parse_failed": false,
+      "cost_usd": 0.001453,
+      "latency_s": 5.73
+    },
+    {
+      "lang": "it",
+      "question": "Quali sono le condizioni per ottenere la cittadinanza svizzera per naturalizzazione?",
+      "expected_status": "refused",
+      "status": "refused",
+      "answer": "Le fonti fornite non contengono le condizioni per ottenere la cittadinanza svizzera per naturalizzazione. Trattano solo di attinenza cantonale e comunale, di stato civile e della cittadinanza dei figli e del coniuge, senza indicare i requisiti della naturalizzazione.",
+      "citations": [],
+      "pointers": [
+        "210:39"
+      ],
+      "top_ranked": [
+        "210:271",
+        "210:161",
+        "210:22",
+        "210:39",
+        "210:267b"
+      ],
+      "n_invalid_ids": 0,
+      "parse_failed": false,
+      "cost_usd": 0.001623,
+      "latency_s": 3.23
+    }
+  ]
+}
