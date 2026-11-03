@@ -104,6 +104,18 @@
     "mcp_tools": {
       "value": "four",
       "source": "docs/mcp.md: list_acts, search_articles, get_article, answer_with_citations"
+    },
+    "judge_kappa": {
+      "value": "0.61",
+      "source": "docs/phase2_report.md judge calibration table: gpt-6.1-sol kappa 0.61"
+    },
+    "judge_bar": {
+      "value": "80%",
+      "source": "docs/eval_spec.md section 5: stop if raw agreement is below 80%"
+    },
+    "questioned_articles": {
+      "value": "3,200",
+      "source": "data/finetune/README.md: 12,800 questions for 3,200 articles (one of the 3,201 pool articles failed validation)"
     }
   }
 }

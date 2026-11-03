@@ -11,10 +11,10 @@ The setting: Swiss federal law in German, French and Italian (8 acts, 4,073 arti
 What I found, on a test set of 164 questions with 95% intervals:
 
 - A 118M-parameter embedding model, fine-tuned on a free GPU (the whole phase cost about 2 USD in API calls), finds the right article in the top 10 for 81% of questions [71, 90], against 55% [46, 63] untuned. For English questions it goes from 24% to 80%, with no LLM call.
-- An LLM-translation pipeline gets 87% [79, 94]. I can't tell the two apart on that metric, but the LLM pipeline orders results better.
-- A full pipeline on the tuned model answers as well as the LLM-translation pipeline as far as I can measure (fact recall 0.80 against 0.82, not distinguishable), at 20% lower cost and 2.2 times lower latency.
+- An LLM-translation pipeline gets 87% [79, 94]. I can't tell the two apart on that metric (the tuned model could be up to about 15 points worse), and the LLM pipeline orders results better.
+- A full pipeline on the tuned model answers as well as the LLM-translation pipeline as far as I can measure (fact recall 0.80 against 0.82, not distinguishable, though the tuned pipeline could be up to about ten points lower), at 20% lower cost and 2.2 times lower latency. The agent I built in the first round scored nominally higher still and I never re-ran it.
 
-What went wrong: a padding bug in my own embedding code made every first-round retrieval number too low. I found it, corrected the numbers and published an errata.
+What went wrong: a padding bug in my own embedding code made every first-round retrieval number I re-measured too low. I found it, corrected the numbers and published an errata.
 
 What I would not claim: the questions were written by an LLM from the article text, the test set has about 110 independent questions, nobody who reads German, French and Italian reviewed the training questions, and no Swiss-law expert has looked at any of it. There is no live demo.
 

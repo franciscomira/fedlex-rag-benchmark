@@ -11,3 +11,4 @@
 # recall@10), and anything inside code spans, code blocks or link targets.
 # Harness numbers belong in placeholders ({{v ...}}, {{d ...}}, {{f key}}), not here.
 95%
+402 @ Payment Required

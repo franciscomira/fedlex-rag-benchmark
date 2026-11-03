@@ -19,6 +19,15 @@ I measured whether a small fine-tuned embedding model can replace an LLM call in
 - Anything about real users or real lawyers: no real questions, no Swiss-law expert, no German/French/Italian reader reviewed the training questions.
 - Anything about fine-tuning a reranker, which was my original question.
 
+## Weak points a reviewer found in my own draft (know them before they ask)
+
+- The tuned embedder vs the LLM translation pipeline on recall@10: the interval for the difference runs from about 15 points worse to about 2 better. "About as often" is a statement about the point estimate only.
+- Answer quality: no detectable difference, but the tuned pipeline's fact recall could be about 10 points lower, and the point estimates for fact recall, faithfulness and traps all favour the LLM pipeline. Judge noise is not in the intervals.
+- The first-round agent (D) scored nominally higher than the served pipeline and was never re-run with the corrected first stage.
+- My own stop rule on the int8 model fired and I chose to continue after asking; the plain search (no reranker) serves the int8 ordering, which is 0.055 MRR worse than fp32.
+- Citation precision is only about 0.58: part of it is citing every article the model used, but I did not separate that from wrong citations.
+- The latency comparison comes from two runs made at the same time on one laptop.
+
 ## Questions to expect, and honest answers
 
 1. **"Isn't your benchmark too easy?"** For rerankers, yes: the questions were written from the article text, so once the right article is among the candidates, any decent reranker finds it. That is why I tuned the first stage, where the benchmark does separate systems.
