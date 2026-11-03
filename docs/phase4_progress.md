@@ -36,3 +36,7 @@ Reference values on test: T1 (fp32) recall@10 0.81, English 0.80; T2 recall@10 0
 6. **Traps:** counts only (k of 15), no ranking claim.
 
 Budget estimate for the three test runs: about 1.7 USD each for P2 and P3 (answering 0.5 to 0.6, judge about 1.2 for 179 items, scaled from the dev runs), 0 for P1; month stands at 1.55 USD.
+
+## 2026-11-03, freeze
+
+Frozen in `eval/frozen_configs.json` before any test number: **P1 35611dd1aa**, **P2 d6a30cf69a**, **P3 716222848a**. The P2 and P3 hashes equal the hashes of their dev dry runs (`dev_P2`, `dev_P3`), so the configurations run on test are the ones that were tried on dev. Each is run once on test.
