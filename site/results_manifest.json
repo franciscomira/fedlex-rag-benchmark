@@ -1,0 +1,162 @@
+{
+ "schema": 1,
+ "title": "Fedlex cross-lingual RAG benchmark: results",
+ "links": {
+  "repo": "https://github.com/franciscomira/fedlex-rag-benchmark",
+  "model": "https://huggingface.co/franciscomira/fedlex-e5-small",
+  "demo": {"text": "demo: coming", "url": null},
+  "mcp_docs": "https://github.com/franciscomira/fedlex-rag-benchmark/blob/main/docs/mcp.md",
+  "fedlex": "https://www.fedlex.admin.ch"
+ },
+ "runs": {
+  "A2": {"id": "2026-10-18_test_78df4b6f59", "label": "A",
+         "name": "Hybrid search, no model (buggy embedder)"},
+  "B2": {"id": "2026-10-18_test_be2a67022b", "label": "B",
+         "name": "Hybrid search, LLM reranker, cited answer (buggy embedder)"},
+  "C2": {"id": "2026-10-18_test_89c5213cec", "label": "C",
+         "name": "LLM translates the question, per-language search, reranker, answer (buggy embedder)"},
+  "D2": {"id": "2026-10-18_test_89a1a1a0ad", "label": "D",
+         "name": "Agent: planner, per-language searchers, citation checker (buggy embedder)"},
+  "A3": {"id": "2026-10-28_test_75cfac7c94", "label": "A corrected",
+         "name": "Hybrid search, corrected embedder, no model"},
+  "Bp": {"id": "2026-10-28_test_b7846648c0", "label": "B'",
+         "name": "Hybrid search + LLM reranker, corrected embedder, retrieval only"},
+  "T1": {"id": "2026-10-28_test_aec4726ef0", "label": "T1",
+         "name": "Fine-tuned embedder alone, no LLM"},
+  "T2": {"id": "2026-10-28_test_ae60b9e8c1", "label": "T2",
+         "name": "Fine-tuned embedder + LLM reranker"},
+  "Cp": {"id": "2026-10-28_test_033e9b80b2", "label": "C'",
+         "name": "LLM translation + hybrid search + reranker, corrected embedder, retrieval only"},
+  "P1": {"id": null, "label": "P1",
+         "name": "Fine-tuned embedder as int8 ONNX file, retrieval only"},
+  "P2": {"id": null, "label": "P2",
+         "name": "Full pipeline with cited answers (fine-tuned embedder, reranker, answerer)"},
+  "P3": {"id": null, "label": "P3",
+         "name": "Translation pipeline with the answer step"}
+ },
+ "sections": {
+  "phase3": {
+   "runs": ["A3", "Bp", "T1", "T2", "Cp"],
+   "comparisons": [["T1", "A3"], ["T2", "T1"], ["T2", "Bp"], ["T2", "Cp"], ["T1", "Cp"]]
+  },
+  "phase2": {
+   "runs": ["A2", "B2", "C2", "D2"],
+   "comparisons": [["C2", "B2"], ["D2", "B2"], ["D2", "C2"]]
+  },
+  "errata": {
+   "runs": ["A2", "A3", "B2", "Bp", "C2", "Cp"],
+   "comparisons": [["A3", "A2"]]
+  },
+  "phase4": {
+   "runs": ["P1", "P2", "P3"],
+   "comparisons": [["P1", "T1"], ["P2", "P3"], ["P2", "B2"], ["P3", "C2"]]
+  }
+ },
+ "reproduce": [
+  {
+   "table": "Phase 3 retrieval table",
+   "tag": "FREE",
+   "commands": ["uv run python -m fedlex_bench.eval report {runs:phase3}"],
+   "needs": "Committed files only (eval/results, eval/test_runs.log).",
+   "note": "Prints the same numbers with 95% intervals; cost and latency are the stored values."
+  },
+  {
+   "table": "Phase 3 paired differences",
+   "tag": "FREE",
+   "commands": ["{compares:phase3}"],
+   "needs": "Committed files only (per_item.jsonl of each run).",
+   "note": "Paired bootstrap, 10,000 resamples of question groups, seed 20261017."
+  },
+  {
+   "table": "Phase 2 answer-level table",
+   "tag": "FREE",
+   "commands": ["uv run python -m fedlex_bench.eval report {runs:phase2}"],
+   "needs": "Committed files only.",
+   "note": "Measured with the buggy embedder; see the errata."
+  },
+  {
+   "table": "Phase 2 paired differences",
+   "tag": "FREE",
+   "commands": ["{compares:phase2}"],
+   "needs": "Committed files only.",
+   "note": "Fact recall and faithfulness are scored by one judge."
+  },
+  {
+   "table": "Errata table",
+   "tag": "FREE",
+   "commands": [
+    "uv run python -m fedlex_bench.eval report {runs:errata}",
+    "{compares:errata}"
+   ],
+   "needs": "Committed files only.",
+   "note": "Corrected minus old system A (paired). B to B' and C to C' are shown side by side, unpaired, because the harness refuses to pair runs with different judge settings."
+  },
+  {
+   "table": "Phase 4 tables (when the runs exist)",
+   "tag": "FREE",
+   "commands": [
+    "uv run python -m fedlex_bench.eval report {runs:phase4}",
+    "{compares:phase4}"
+   ],
+   "needs": "Committed files only.",
+   "note": "Rows stay pending until the run ids are added to results_manifest.json."
+  },
+  {
+   "table": "Re-running a system on dev (any table)",
+   "tag": "KEYS",
+   "commands": [
+    "uv run python -m fedlex_bench.eval run --split dev --method hybrid --config all_lang --rerank claude-haiku-5-5 --retrieve-k 150 --rerank-k 60 --answer claude-haiku-5-5"
+   ],
+   "needs": "The git-ignored model-response cache (eval/cache) and corpus (data/processed) replay a run for free. Without the cache it needs ANTHROPIC_API_KEY and OPENAI_API_KEY in .env and spends money, capped at {cap_usd} USD per month in config.toml, with a confirmation above {confirm_usd} USD.",
+   "note": "A test configuration that has a completed line in eval/test_runs.log is refused, so the committed run folders are the record of the test numbers."
+  },
+  {
+   "table": "Tuned-embedder systems T1 and T2 on dev",
+   "tag": "FREE",
+   "commands": [
+    "uv run python -m fedlex_bench.eval run --split dev --method embedding --config all_lang --chunking article --embedder models/r1_inbatch/best --retrieve-k 60 --rerank-k 30"
+   ],
+   "needs": "The git-ignored checkpoint models/r1_inbatch/best, produced by the training step below, and the git-ignored corpus (data/processed). Retrieval only: no key and no GPU. T2 adds a reranker, which replays from the git-ignored cache (eval/cache) or needs ANTHROPIC_API_KEY.",
+   "note": "The test runs of T1 and T2 were frozen once and cannot be re-run on the test split."
+  },
+  {
+   "table": "Fine-tuning data (training set and exclusions)",
+   "tag": "FREE",
+   "commands": [
+    "uv run python -m fedlex_bench.finetune.exclusions",
+    "uv run python -m fedlex_bench.finetune.dataset"
+   ],
+   "needs": "The git-ignored corpus (data/processed) and the synthetic questions in data/finetune.",
+   "note": "Builds the leakage-checked training pool and the train and validation pairs."
+  },
+  {
+   "table": "Fine-tuning data (generating the synthetic questions)",
+   "tag": "KEYS",
+   "commands": [
+    "uv run python -m fedlex_bench.finetune.synth estimate",
+    "uv run python -m fedlex_bench.finetune.synth run"
+   ],
+   "needs": "ANTHROPIC_API_KEY in .env; spends money unless the cache replays it, under the same monthly cap ({cap_usd} USD).",
+   "note": "The estimate step makes no call."
+  },
+  {
+   "table": "Training the embedder",
+   "tag": "GPU",
+   "commands": [
+    "uv run python notebooks/make_kaggle_kit.py"
+   ],
+   "needs": "A free Kaggle account with GPU access (T4); then run notebooks/finetune_kaggle.ipynb as described in notebooks/README.md. A short run on a free GPU.",
+   "note": "The trained weights are not in git; the published model is on Hugging Face."
+  },
+  {
+   "table": "This page",
+   "tag": "FREE",
+   "commands": [
+    "uv run python -m fedlex_bench.site build",
+    "uv run pytest tests/site"
+   ],
+   "needs": "Committed files only.",
+   "note": "Rebuilding gives byte-identical output."
+  }
+ ]
+}
