@@ -124,3 +124,22 @@ def test_notices_text_and_check():
     assert notices.has_required(notices.notice_text())
     assert not notices.has_required("Not legal advice.")
     assert "Dies ist keine amtliche Veröffentlichung" in notices.notice_text()
+
+
+def test_model_digest_check(tmp_path):
+    from fedlex_bench.retrieval.embedding import OnnxE5Embedder
+    from fedlex_bench.serve.pipeline import INT8_DIGEST, INT8_FILE, check_model_digest
+
+    (tmp_path / INT8_FILE).write_bytes(b"not the measured model")
+    with pytest.raises(RuntimeError, match="not the measured int8 file"):
+        check_model_digest(OnnxE5Embedder(local_dir=tmp_path, onnx_file=INT8_FILE))
+    assert len(INT8_DIGEST) == 12
+
+
+def test_real_int8_file_matches_digest():
+    from fedlex_bench.retrieval.embedding import OnnxE5Embedder
+    from fedlex_bench.serve.pipeline import INT8_FILE, LOCAL_MODEL_DIR, check_model_digest
+
+    if not (LOCAL_MODEL_DIR / INT8_FILE).exists():
+        pytest.skip("local int8 export not present")
+    check_model_digest(OnnxE5Embedder(local_dir=LOCAL_MODEL_DIR, onnx_file=INT8_FILE))

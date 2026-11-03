@@ -316,7 +316,27 @@ def headline(rep: Report) -> str:
            else "Answer-level results for the tuned pipeline are pending (section 4).")
         + " The questions were written by an LLM from the text of the article they ask about.</p>"
     )
-    return intro + para + tail
+    int8 = ""
+    if all_ok(rep, "P1", "T1"):
+        int8 = (
+            "<p><strong>What is served is not T1.</strong> The numbers above are for the "
+            "full-precision model (T1). The demo and the MCP server use the smaller int8 file "
+            f"(P1, retrieval only: recall@10 {e(f.v('P1', 'recall@10'))}). On the test questions "
+            f"P1 minus T1 is {e(f.d('P1', 'T1', 'recall@10'))} on recall@10 "
+            f"({e(claim('P1', 'T1', 'recall@10'))}) and {e(f.d('P1', 'T1', 'mrr'))} on MRR "
+            f"({e(claim('P1', 'T1', 'mrr'))}): the int8 file orders the results a little worse. "
+            + (
+                "With the LLM reranker on top, MRR is "
+                f"{e(f.v('P2', 'mrr'))} for the shipped pipeline (int8, P2) against "
+                f"{e(f.v('T2', 'mrr'))} for the full-precision one (T2, retrieval only); the "
+                "intervals overlap broadly, and the two runs were not compared pairwise because "
+                "they differ in judge settings."
+                if all_ok(rep, "P2", "T2")
+                else ""
+            )
+            + "</p>"
+        )
+    return intro + para + int8 + tail
 
 
 def _llm_name(rep: Report) -> str:
@@ -493,6 +513,11 @@ def section_phase4(rep: Report) -> str:
         + "<h3>Paired differences</h3>"
         + diff_table(rep, "phase4", metrics)
         + not_claimable(rep, "phase4", metrics)
+        + "<p>The comparisons of P2 with B and of P3 with C are exploratory: B and C are the "
+        "Phase 2 runs, which used the buggy first stage, so the retrieval stage differs in "
+        "several ways at once (fine-tuning, the padding fix, no keyword search, int8). They show "
+        "that the shipped pipeline is better than what was published in Phase 2, not which change "
+        "helped. They were not all planned before the runs.</p>"
         + "</section>"
     )
 
@@ -531,9 +556,10 @@ def section_limits(rep: Report) -> str:
             f"Trap questions are few ({n_traps}). They are reported as counts, not ranked.",
         ],
         "What was measured": [
-            "The corrected systems (A corrected, B', C', T1, T2) were measured on retrieval only. "
-            "Nothing shows yet that the tuned embedder improves final answers; the Phase 4 rows "
-            "are meant to test that.",
+            "The corrected systems of Phase 3 (A corrected, B', C', T1, T2) were measured on "
+            "retrieval only. Answers were measured for two pipelines in Phase 4 (the shipped one "
+            "and the translation pipeline), once each; the effect of the tuned embedder on "
+            "answers alone, apart from the other changes to the first stage, was not isolated.",
             "System D, the agent, was not re-measured with the corrected embedder, and the "
             "Phase 2 answer-level results for B, C and D predate the fix.",
             "After tuning, embedding alone beat the hybrid with keyword search on the "

@@ -50,7 +50,7 @@ Six phases over about 14 weeks at 8–10 h/week; each phase ends with something 
 | 1 · Benchmark | 3–4 | ~150 hand-checked questions with gold answer + source article, not-in-corpus traps | done (frozen v1, review coverage lower than planned: see phase 1 report) |
 | 2 · Baseline harness | 5–6 | Hybrid retrieval + LLM rerank; Claude, GPT, Gemini compared on recall, faithfulness, cost | done (plus a translation control and an ADK agent; see phase 2 report) |
 | 3 · Fine-tuning | 7–10 | Fine-tuned multilingual embedding model (primary) and, if time allows, a small reranker; base vs. tuned vs. LLM query translation; quality, latency and cost per query | done (retrieval only; see `docs/phase3_report.md`) |
-| 4 · Ship | 11–12 | Live demo + MCP server, results page, one-command reproduction | planned |
+| 4 · Ship | 11–12 | Live demo + MCP server, results page, one-command reproduction | measured and built, publication pending (see `docs/phase4_progress.md`) |
 | 5 · Write-up and apply | 13–14 | Long-form post + LinkedIn, CV updated, applications start | planned |
 
 Phase 3 is the core experiment and the fine-tuning learning block, so it gets the most time (4 weeks).
@@ -68,6 +68,10 @@ Phases 0 to 2 are done; each has a report in `docs/`. Findings that shape the re
 ## Phase 3 result (2026-10-28)
 
 The fine-tuned embedding model (multilingual-e5-small, 11.5k synthetic questions, 3 epochs on a free GPU, 2.16 USD) reaches test recall@10 **0.81 [0.71, 0.90]** with no LLM call (0.1 s, 0 USD), against 0.55 for the untuned hybrid (+0.26 [+0.17, +0.35]); English questions 0.24 to 0.80. The LLM-translation pipeline reaches 0.87 [0.79, 0.94] at 8 s and 0.0024 USD (difference to the tuned model not claimable on recall@10, clearly better at ordering: MRR 0.84 against 0.63). Tuned embedder plus the Haiku reranker: 0.89 [0.80, 0.97], not distinguishable from the translation pipeline, five times faster. Retrieval only: answer quality was not re-measured. Hard negatives did not help; a quarter of the data gives most of the gain. A padding bug in the Phase 2 embedder was found and corrected (errata in the Phase 2 report: Phase 2 retrieval numbers were too low). Open for later: answer-level reruns with the corrected first stage, the int8 model on test, a Swiss-law expert review, and a visual follow-up project.
+
+## Phase 4 result (2026-11-03)
+
+The served pipeline (tuned int8 embedder on CPU, Haiku reranker over the top 60 of 150, code-validated cited answer) reaches test recall@10 **0.86 [0.78, 0.94]**, fact recall **0.80 [0.71, 0.89]** and faithfulness 0.84 at 0.0024 USD and 5.5 s per question; the LLM-translation pipeline with the same answer step reaches 0.87 and 0.82 at 0.0030 USD and 11.9 s: not distinguishable on quality, the served one cheaper and about twice as fast. The int8 file loses 0.055 MRR [0.018, 0.097] against fp32 on test (claimable) and 0.02 recall@10 (not claimable); decided with Francisco to keep it. Fact recall was above the range written beforehand for both. Spend for Phase 4 so far: about 4 USD (month 4.16 of 25). Demo, MCP server and results page are built; publishing them awaits approval. Details: `docs/phase4_progress.md`.
 
 ## Phase 3 decision: what we fine-tune (2026-10-28)
 

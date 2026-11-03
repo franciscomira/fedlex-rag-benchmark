@@ -29,6 +29,7 @@ from fedlex_bench.types import LLMClient, QueryLang
 HUB_REPO = "franciscomira/fedlex-e5-small"
 HUB_REVISION = "786ca378bae0b6e6b8e32be6eaae2df517693118"  # pinned: onnx/model_int8.onnx
 INT8_FILE = "model_int8.onnx"
+INT8_DIGEST = "9d9e6cd1fdd2"  # sha256 prefix of the file measured as P1/P2 (also the Hub file)
 LOCAL_MODEL_DIR = PROJECT_ROOT / "models" / "r1_inbatch" / "onnx"
 LANGS = ("de", "fr", "it")
 QUERY_LANGS = ("en", "de", "fr", "it")
@@ -53,6 +54,16 @@ def resolve_model_dir() -> Path:
     model = hf_hub_download(HUB_REPO, f"onnx/{INT8_FILE}", revision=HUB_REVISION)
     hf_hub_download(HUB_REPO, "onnx/tokenizer.json", revision=HUB_REVISION)
     return Path(model).parent
+
+
+def check_model_digest(embedder: OnnxE5Embedder) -> None:
+    """Refuse to serve a model file other than the one that was measured (P1, P2)."""
+    digest = embedder.model_id.split("/")[-2]  # onnx-local/<dir>/<file>/<digest>/maxlen<n>
+    if digest != INT8_DIGEST:
+        raise RuntimeError(
+            f"model file digest {digest} is not the measured int8 file ({INT8_DIGEST}); "
+            "the numbers in the results page do not apply to it"
+        )
 
 
 @dataclass(frozen=True)
@@ -170,6 +181,7 @@ class ServingPipeline:
             if embedder is None:
                 model_dir = self._model_dir or resolve_model_dir()
                 embedder = OnnxE5Embedder(local_dir=model_dir, onnx_file=INT8_FILE)
+                check_model_digest(embedder)
             articles = (
                 pd.read_parquet(ARTICLES_PARQUET) if self._articles is None else self._articles
             )

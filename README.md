@@ -19,7 +19,8 @@ Swiss federal law (Fedlex) is published officially in German, French and Italian
 | 1 Benchmark | done: `benchmark/v1`, 242 items (150 answerable questions + 20 traps, plus 72 translations). [Report](docs/phase1_report.md), spec [benchmark_spec.md](docs/benchmark_spec.md) |
 | 2 Baseline harness, providers, agent | done: hybrid retrieval, LLM reranker, three providers, ADK agent, evaluation harness. [Report](docs/phase2_report.md), spec [eval_spec.md](docs/eval_spec.md) |
 | 3 Fine-tuning | done: a fine-tuned multilingual-e5-small reaches test recall@10 0.81 with no LLM call; retrieval only. [Report](docs/phase3_report.md), [data](data/finetune/README.md), model: [franciscomira/fedlex-e5-small on Hugging Face](https://huggingface.co/franciscomira/fedlex-e5-small) ([model card source](docs/model_card.md)). Found and corrected an embedder bug that affected the Phase 2 retrieval numbers: see the errata in the [Phase 2 report](docs/phase2_report.md) |
-| 4 Ship, 5 write-up | planned. [Project plan](docs/PROJECT_PLAN.md) |
+| 4 Ship | measured and built, not yet published: the int8 model and the full pipeline were run once each on test (below); a retrieval-only demo app, an MCP server and a static results page are in the repository. Log: [phase4_progress.md](docs/phase4_progress.md) |
+| 5 Write-up | planned. [Project plan](docs/PROJECT_PLAN.md) |
 
 ### Phase 2 results in one table
 
@@ -49,6 +50,24 @@ Test split, 164 answerable items, retrieval only (no answer or judge), 95% group
 
 The tuned embedder alone gains +0.26 recall@10 [+0.17, +0.35] over the untuned hybrid and is within 0.06 of the LLM-translation pipeline on recall@10 (difference not claimable), but orders worse (MRR 0.63 against 0.84). With a cheap reranker on top it is not distinguishable from the translation pipeline (+0.015 recall@10 [-0.05, +0.07]) at a fifth of the latency. Training used 11.5k synthetic questions (0.87 USD) and under 15 minutes on a free GPU; hard negatives did not help. The benchmark's questions were written by an LLM from the article text, so these numbers describe finding that article, not answer quality. The weights (fp32 safetensors and an int8 ONNX file) are published at [huggingface.co/franciscomira/fedlex-e5-small](https://huggingface.co/franciscomira/fedlex-e5-small); the training data stays in this repository.
 
+### Phase 4 results: the pipeline that is served
+
+Test split, 164 answerable items and 15 traps, judge gpt-6.1-sol, 95% group-bootstrap intervals; each frozen configuration was run once, hypotheses written before. The served pipeline (P2) is the tuned embedder as an int8 ONNX file (118 MB, CPU), the Haiku reranker over the top 60 of 150 candidates, and a cited answer whose article ids are validated by code, with an explicit "not in the sources" path. The serving code builds the same system the harness measured.
+
+| System | Recall@10 | Fact recall | Faithfulness | Traps correct | Cost per question | Latency p50 |
+| --- | --- | --- | --- | --- | --- | --- |
+| P1 int8 embedder alone (retrieval only) | 0.79 [0.69, 0.88] | n/a | n/a | n/a | 0 | 0.05 s |
+| **P2 served pipeline** (int8 + reranker + cited answer) | **0.86 [0.78, 0.94]** | **0.80 [0.71, 0.89]** | 0.84 [0.80, 0.87] | 9 of 15 | $0.0024 | 5.5 s |
+| P3 LLM translation + reranker + cited answer (corrected embedder) | 0.87 [0.79, 0.94] | 0.82 [0.75, 0.89] | 0.85 [0.83, 0.88] | 11 of 15 | $0.0030 | 11.9 s |
+
+P2 and P3 are not distinguishable on recall@10, fact recall or faithfulness (fact recall P2 minus P3 -0.02 [-0.10, +0.05]); P2 is cheaper and about twice as fast, both claimable. The int8 file loses 0.02 recall@10 against fp32 (not claimable) and 0.055 MRR (claimable) on test; with the reranker on top the MRR is 0.84 [0.75, 0.92] for P2 against 0.87 [0.78, 0.95] for the fp32 equivalent (T2, retrieval only), overlapping broadly. Fact recall is higher by +0.20 [+0.10, +0.29] than Phase 2's single-shot system, which used the buggy first stage; the first stage changed in four ways at once (fine-tuning, padding fix, no BM25, int8), so this does not say which helped. Trap counts are too small to rank. Fact recall came out above the range I wrote down beforehand for both P2 and P3 (details in the log). Limits: the questions were written by an LLM from the article text, nobody who reads German, French or Italian reviewed the training questions, no Swiss-law expert reviewed anything, and system D was not re-measured with the corrected embedder.
+
+### Demo, MCP server, results page
+
+- **Results page:** `uv run python -m fedlex_bench.site build` writes `site/index.html` from the committed run folders (every number is read from the harness output). Publishing it is a separate step; see [results_page_notes.md](docs/results_page_notes.md).
+- **Demo app:** `uv run --group serve python -m fedlex_bench.serve.web` serves a retrieval-only search (no LLM, no key, no stored questions) with the three-language texts, plus recorded full-pipeline examples. A public deployment is described in [demo/README.md](demo/README.md) and is not live yet.
+- **MCP server:** `uv run --group serve python -m fedlex_bench.serve.mcp_server` (tools `list_acts`, `search_articles`, `get_article`, `answer_with_citations`). Several Fedlex MCP servers exist. What this one adds: retrieval measured on a benchmark with intervals, citations validated by code, the article text in three languages side by side. What it does not: it covers 8 federal acts, not all of Fedlex, and it is not an official source. See [docs/mcp.md](docs/mcp.md).
+
 ## Reproduce
 
 Requires [uv](https://docs.astral.sh/uv/). API keys go in `.env` (copy `.env.example`); nothing in this repository needs a key to read or to run the tests.
@@ -66,6 +85,11 @@ uv sync --group finetune
 uv run python -m fedlex_bench.finetune.exclusions    # training pool: dev/test gold, neighbours, twins excluded
 uv run python -m fedlex_bench.finetune.dataset       # split by article
 uv run python -m fedlex_bench.eval report 2026-10-28_test_aec4726ef0 2026-10-28_test_ae60b9e8c1 2026-10-28_test_033e9b80b2
+
+# Phase 4: rebuild the table above from the committed runs (free, no key)
+uv run python -m fedlex_bench.eval report 2026-11-03_test_35611dd1aa 2026-11-03_test_d6a30cf69a 2026-11-03_test_716222848a
+uv run python -m fedlex_bench.eval compare 2026-11-03_test_d6a30cf69a 2026-11-03_test_716222848a
+uv run python -m fedlex_bench.site build             # the results page
 
 # Phase 2: indexes and evaluation
 uv run python -m fedlex_bench.retrieval build        # embeds the corpus (CPU, about 15 minutes)
@@ -85,7 +109,10 @@ data/raw/             source downloads (not committed)
 data/processed/       aligned, chunked articles and indexes (not committed)
 benchmark/v1/         frozen benchmark (read-only); earlier folders are the Phase 1 build trail
 src/fedlex_bench/     ingest, chunk, alignment; benchmark/ (build tools); retrieval/; llm/ and answer/;
-                      agent/ (Google ADK); eval/ (metrics, judge, runner, CLI); finetune/ (Phase 3)
+                      agent/ (Google ADK); eval/ (metrics, judge, runner, CLI); finetune/ (Phase 3);
+                      serve/ (serving pipeline, demo app, MCP server); site/ (results page builder)
+site/                 the built results page
+demo/                 Dockerfile and notes for a Hugging Face Space, recorded examples
 tests/                pytest, offline
 eval/                 results, frozen test configurations, test-run log, price table, judge calibration
 data/finetune/       Phase 3 training data (pool, synthetic questions, pairs, audit) and its README
