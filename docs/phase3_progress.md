@@ -198,3 +198,8 @@ No high-severity finding; every test number in the report matched the evidence. 
 8. **Twin exclusion is symmetric** (containment gap): not fixed (would change the pool and require retraining); quantified (6, 37 and 84 pool articles at 80%, 60% and 50% containment, touching 5, 18 and 33 gold articles) and the headline gain re-estimated on test items not touched at 60%: +0.30 [+0.20, +0.40] in group means (n = 142 items, 97 groups); T1's recall@10 is 0.98 on the 22 touched items and 0.78 on the rest (untuned: 0.68 and 0.52). Disclosed as limitation 10.
 9. **Leakage tests weaker than claimed**: added an independent twin implementation, a test that every model's recorded data hashes match the current files, and a batch-equals-single test for the torch embedder. The corpus tests still skip when the data is absent.
 10. **Persona code never applied**: dead code removed, data README, report and model card corrected (the generated data itself is unchanged).
+
+## 2026-11-03, publication
+
+- GitHub: `franciscomira/fedlex-rag-benchmark` (public) pushed to `main` after a read-only scan (no secrets in the tree or the history, no corpus parquet or `.env` tracked, largest tracked file 3.8 MB); README updated first (Phase 3 table, Phase 2 erratum notice).
+- Hugging Face: `franciscomira/fedlex-e5-small` (public), uploaded with `src/fedlex_bench/finetune/release.py` (checkpoint, int8 ONNX, tokenizer, training config and log, model card). The base model's licence (MIT) was checked on its model page. Verified by downloading the published files and comparing embeddings with the local checkpoint: cosine 1.000000 for queries and passages. The synthetic dataset was not published to Hugging Face (it is in the GitHub repository). The int8 file was checked on dev only.

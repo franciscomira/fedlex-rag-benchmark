@@ -18,7 +18,7 @@ Swiss federal law (Fedlex) is published officially in German, French and Italian
 | 0 Scope and data | done: 8 acts, 4,073 articles aligned in DE/FR/IT (12,219 rows). [Report](docs/phase0_report.md) |
 | 1 Benchmark | done: `benchmark/v1`, 242 items (150 answerable questions + 20 traps, plus 72 translations). [Report](docs/phase1_report.md), spec [benchmark_spec.md](docs/benchmark_spec.md) |
 | 2 Baseline harness, providers, agent | done: hybrid retrieval, LLM reranker, three providers, ADK agent, evaluation harness. [Report](docs/phase2_report.md), spec [eval_spec.md](docs/eval_spec.md) |
-| 3 Fine-tuning | done: a fine-tuned multilingual-e5-small reaches test recall@10 0.81 with no LLM call; retrieval only. [Report](docs/phase3_report.md), [data](data/finetune/README.md), [model card (draft)](docs/model_card.md). Found and corrected an embedder bug that affected the Phase 2 retrieval numbers: see the errata in the [Phase 2 report](docs/phase2_report.md) |
+| 3 Fine-tuning | done: a fine-tuned multilingual-e5-small reaches test recall@10 0.81 with no LLM call; retrieval only. [Report](docs/phase3_report.md), [data](data/finetune/README.md), model: [franciscomira/fedlex-e5-small on Hugging Face](https://huggingface.co/franciscomira/fedlex-e5-small) ([model card source](docs/model_card.md)). Found and corrected an embedder bug that affected the Phase 2 retrieval numbers: see the errata in the [Phase 2 report](docs/phase2_report.md) |
 | 4 Ship, 5 write-up | planned. [Project plan](docs/PROJECT_PLAN.md) |
 
 ### Phase 2 results in one table
@@ -47,7 +47,7 @@ Test split, 164 answerable items, retrieval only (no answer or judge), 95% group
 | **Fine-tuned embedder + Haiku reranker** | **0.79** | **0.89 [0.80, 0.97]** | 0.89 | $0.0016 | 1.6 s |
 | LLM translation + hybrid + Haiku reranker (corrected) | 0.76 | 0.87 [0.79, 0.94] | 0.86 | $0.0024 | 8.0 s |
 
-The tuned embedder alone gains +0.26 recall@10 [+0.17, +0.35] over the untuned hybrid and is within 0.06 of the LLM-translation pipeline on recall@10 (difference not claimable), but orders worse (MRR 0.63 against 0.84). With a cheap reranker on top it is not distinguishable from the translation pipeline (+0.015 recall@10 [-0.05, +0.07]) at a fifth of the latency. Training used 11.5k synthetic questions (0.87 USD) and under 15 minutes on a free GPU; hard negatives did not help. The benchmark's questions were written by an LLM from the article text, so these numbers describe finding that article, not answer quality.
+The tuned embedder alone gains +0.26 recall@10 [+0.17, +0.35] over the untuned hybrid and is within 0.06 of the LLM-translation pipeline on recall@10 (difference not claimable), but orders worse (MRR 0.63 against 0.84). With a cheap reranker on top it is not distinguishable from the translation pipeline (+0.015 recall@10 [-0.05, +0.07]) at a fifth of the latency. Training used 11.5k synthetic questions (0.87 USD) and under 15 minutes on a free GPU; hard negatives did not help. The benchmark's questions were written by an LLM from the article text, so these numbers describe finding that article, not answer quality. The weights (fp32 safetensors and an int8 ONNX file) are published at [huggingface.co/franciscomira/fedlex-e5-small](https://huggingface.co/franciscomira/fedlex-e5-small); the training data stays in this repository.
 
 ## Reproduce
 
