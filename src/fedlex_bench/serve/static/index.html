@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Fedlex cross-lingual search</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header class="site-header">
+  <h1>Fedlex cross-lingual search</h1>
+  <p class="lead">Ask a question about Swiss federal law in English, German, French or Italian.
+  The demo returns the most relevant articles of the statute, with the German, French and Italian
+  texts side by side. It does not write answers.</p>
+</header>
+
+<main>
+  <section class="notice" aria-label="Important notices">
+    <h2 class="visually-hidden">Important notices</h2>
+    {{NOTICES}}
+    <p><strong>How good is it?</strong> The ranking comes from a small multilingual embedding model
+    that was fine-tuned for this corpus. It is wrong sometimes: the article you need may be ranked
+    low or may be missing from the top results, and a high score does not mean the article answers
+    your question. The score is a similarity between your question and the best-matching passage,
+    not a probability. Always read the article itself and check the Fedlex source.</p>
+    <p><strong>Privacy.</strong> This app does not store or log your question. It is sent to the
+    server as a request body (not in the address bar) and used only to find articles. The
+    hosting platform may keep ordinary connection logs.</p>
+  </section>
+
+  <section aria-labelledby="search-h">
+    <h2 id="search-h">Search</h2>
+    <form id="search-form" autocomplete="off">
+      <label for="q">Your question</label>
+      <textarea id="q" name="q" rows="3" maxlength="{{MAX_CHARS}}" required
+        placeholder="For example: When can a landlord terminate a lease? / Wann darf der Vermieter k&#252;ndigen?"></textarea>
+      <div class="form-row">
+        <button type="submit" id="go">Search</button>
+        <span class="muted" id="counter">0 / {{MAX_CHARS}}</span>
+      </div>
+    </form>
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+    <ol id="results" class="results"></ol>
+  </section>
+
+  <section aria-labelledby="coverage-h">
+    <h2 id="coverage-h">What the corpus covers</h2>
+    {{COVERAGE}}
+  </section>
+
+  <section aria-labelledby="examples-h">
+    <h2 id="examples-h">Recorded full pipeline</h2>
+    {{EXAMPLES}}
+  </section>
+</main>
+
+<footer class="site-footer">
+  <p>Not an official publication. Not legal advice. Statute text: Fedlex, Swiss Federal Chancellery
+  open data. This project is an independent research demo.</p>
+</footer>
+<script src="/static/app.js" defer></script>
+</body>
+</html>
