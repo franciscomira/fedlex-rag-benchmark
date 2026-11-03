@@ -20,7 +20,9 @@ the next ones; see "Latency" below).
   pinned revision on the Hugging Face Hub (downloaded once into the Hub cache).
 - Only for `answer_with_citations`: `ANTHROPIC_API_KEY`, in the repository's `.env` or in the
   server's environment. The monthly budget cap in `config.toml` applies and cannot be bypassed from
-  the server.
+  the server. Each call costs about 0.003 USD of your API budget. In addition, a server process
+  allows at most 20 `answer_with_citations` calls (set `FEDLEX_MCP_MAX_PAID_CALLS` to change it, `0`
+  disables the paid tool), and the calls run one at a time. Restart the server to reset the counter.
 
 ## Install
 
@@ -62,7 +64,7 @@ paste keys into the config file.
 Every result is a JSON object whose first field, `notices`, carries the three project notices
 (`not_official_en`, `not_official_de`, `not_legal_advice`) and a `source_note`: statute text is
 verbatim Fedlex data, while rankings, scores, answers and the choice of citations are generated.
-Tool errors (bad input, unknown id, no key, budget) are plain error messages without statute text.
+Tool errors (bad input, unknown id, no key, budget, paid-call limit) are plain error messages without statute text.
 
 | Tool | Arguments | Cost | Returns |
 | --- | --- | --- | --- |
@@ -74,7 +76,8 @@ Tool errors (bad input, unknown id, no key, budget) are plain error messages wit
 How citations are handled: article ids, titles and texts come from the corpus. The model only
 proposes ids; code keeps those that were among the retrieved articles and drops the rest.
 `n_invalid_ids` reports how many were dropped. Fetch the text of a cited article with
-`get_article`. Questions and keys are never logged; logs go to stderr, and stdout carries only the
+`get_article`. Questions and keys are never logged (the HTTP and SDK loggers stay at WARNING even with
+`FEDLEX_MCP_LOG=DEBUG`, because at DEBUG they print request options); logs go to stderr, and stdout carries only the
 protocol.
 
 Example prompts: "Which acts does the Fedlex server cover?", "Search for the notice period for

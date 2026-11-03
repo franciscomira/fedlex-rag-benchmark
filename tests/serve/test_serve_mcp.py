@@ -329,3 +329,93 @@ def test_tool_calls_do_not_write_to_stdout(server, capfd):
     call(server, "get_article", article_id="220:1")
     call(server, "answer_with_citations", question="Frage")
     assert capfd.readouterr().out == ""
+
+
+# --- paid-call limits and logging ----------------------------------------------------------------
+
+
+def test_paid_calls_are_capped_per_process(pipe):
+    server = mcp_server.create_server(pipe, api_key_available=lambda: True, max_paid_calls=2)
+    for _ in range(2):
+        assert not call(server, "answer_with_citations", question="Wie ist die Kuendigung?")[0]
+    err, text = call(server, "answer_with_citations", question="Wie ist die Kuendigung?")
+    assert err and "Paid-call limit" in text and "FEDLEX_MCP_MAX_PAID_CALLS" in text
+    assert not call(server, "search_articles", query="Mietzins")[0]  # free tools unaffected
+
+
+def test_rejected_inputs_do_not_use_the_paid_cap(pipe):
+    server = mcp_server.create_server(pipe, api_key_available=lambda: True, max_paid_calls=1)
+    assert call(server, "answer_with_citations", question="  ")[0]
+    assert not call(server, "answer_with_citations", question="Wie ist die Kuendigung?")[0]
+
+
+def test_paid_cap_default_and_env(monkeypatch):
+    monkeypatch.delenv(mcp_server.MAX_PAID_CALLS_ENV, raising=False)
+    assert mcp_server._max_paid_calls_from_env() == 20
+    monkeypatch.setenv(mcp_server.MAX_PAID_CALLS_ENV, "3")
+    assert mcp_server._max_paid_calls_from_env() == 3
+    monkeypatch.setenv(mcp_server.MAX_PAID_CALLS_ENV, "many")
+    assert mcp_server._max_paid_calls_from_env() == 20
+
+
+def test_zero_cap_blocks_every_paid_call(pipe):
+    server = mcp_server.create_server(pipe, api_key_available=lambda: True, max_paid_calls=0)
+    assert call(server, "answer_with_citations", question="Frage")[0]
+
+
+def test_paid_calls_never_overlap():
+    import threading
+    import time
+
+    active = {"now": 0, "max": 0}
+
+    class Slow:
+        def ask(self, *a, **k):
+            active["now"] += 1
+            active["max"] = max(active["max"], active["now"])
+            time.sleep(0.05)
+            active["now"] -= 1
+            raise RuntimeError("stop")
+
+    server = mcp_server.create_server(Slow(), api_key_available=lambda: True, max_paid_calls=10)
+    threads = [
+        threading.Thread(
+            target=call, args=(server, "answer_with_citations"), kwargs={"question": "Q"}
+        )
+        for _ in range(4)
+    ]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert active["max"] == 1
+
+
+def test_description_states_the_cost(server):
+    tools = {t.name: t for t in list_tools(server)}
+    assert "0.003 USD" in tools["answer_with_citations"].description
+
+
+def test_debug_logging_keeps_sdk_loggers_quiet_and_questions_off_stderr(capfd, monkeypatch):
+    import logging
+
+    names = list(mcp_server.QUIET_LOGGERS)
+    root = logging.getLogger()
+    saved_root = root.level
+    saved = {n: logging.getLogger(n).level for n in names}
+    handler = logging.StreamHandler(sys.stderr)
+    root.addHandler(handler)
+    monkeypatch.setenv("FEDLEX_MCP_LOG", "DEBUG")
+    try:
+        mcp_server.configure_logging()
+        root.setLevel(logging.DEBUG)
+        for n in names:  # what the SDKs do at DEBUG: log the request options with the prompt
+            logging.getLogger(n).debug("Request options: geheime-frage-xyz")
+            logging.getLogger(n + ".sub").debug("geheime-frage-xyz")
+            assert not logging.getLogger(n).isEnabledFor(logging.DEBUG)
+        assert "geheime-frage-xyz" not in capfd.readouterr().err
+    finally:
+        root.removeHandler(handler)
+        root.setLevel(saved_root)
+        for n, level in saved.items():
+            logging.getLogger(n).setLevel(level)

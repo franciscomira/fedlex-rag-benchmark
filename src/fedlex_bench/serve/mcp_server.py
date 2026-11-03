@@ -44,6 +44,10 @@ MAX_K = 50
 SNIPPET_CHARS = 140
 ARTICLE_ID_RE = re.compile(r"^\d+(?:\.\d+)*:[0-9A-Za-z._/-]{1,24}$")
 LANGS = ("de", "fr", "it")
+DEFAULT_MAX_PAID_CALLS = 20  # per server process; override with FEDLEX_MCP_MAX_PAID_CALLS
+MAX_PAID_CALLS_ENV = "FEDLEX_MCP_MAX_PAID_CALLS"
+# Libraries that log request options (including prompts) at DEBUG: never below WARNING.
+QUIET_LOGGERS = ("anthropic", "httpx", "httpcore", "openai", "google")
 
 SOURCE_NOTE = (
     "Statute text (titles, article texts, source URLs) is verbatim Fedlex data, unaltered. "
@@ -158,13 +162,29 @@ def _corpus_acts(pipeline: Any) -> list[dict[str, Any]]:
     return rows
 
 
+def _max_paid_calls_from_env() -> int:
+    raw = os.environ.get(MAX_PAID_CALLS_ENV, "").strip()
+    try:
+        return max(0, int(raw)) if raw else DEFAULT_MAX_PAID_CALLS
+    except ValueError:
+        log.warning("%s is not an integer; using %d", MAX_PAID_CALLS_ENV, DEFAULT_MAX_PAID_CALLS)
+        return DEFAULT_MAX_PAID_CALLS
+
+
 def create_server(
     pipeline: PipelineLike | None = None,
     *,
     api_key_available: Callable[[], bool] = _default_key_available,
+    max_paid_calls: int | None = None,
 ) -> MCPServer:
-    """Build the MCP server. `pipeline=None` makes the real one lazily on the first tool call."""
+    """Build the MCP server. `pipeline=None` makes the real one lazily on the first tool call.
+
+    `max_paid_calls` caps answer_with_citations calls per server process (default 20, or
+    $FEDLEX_MCP_MAX_PAID_CALLS). Paid calls are serialized, so the budget check before a call
+    always sees the spend recorded by the previous one."""
     lock = threading.Lock()
+    paid_lock = threading.Lock()  # one paid call at a time per process
+    paid = {"n": 0, "max": _max_paid_calls_from_env() if max_paid_calls is None else max_paid_calls}
     state: dict[str, Any] = {"pipeline": pipeline}
 
     def get_pipeline() -> Any:
@@ -272,8 +292,10 @@ def create_server(
             Field(description="Language of the question and of the answer."),
         ] = "en",
     ) -> dict[str, Any]:
-        """The full measured pipeline: tuned retrieval, LLM rerank, cited answer. Costs a few cents
-        per call and needs ANTHROPIC_API_KEY (the monthly budget cap in config.toml applies).
+        """The full measured pipeline: tuned retrieval, LLM rerank, cited answer. Each call costs
+        about 0.003 USD of the server owner's API budget, so use it sparingly: it is capped per
+        server process, calls run one at a time, and the monthly cap in config.toml applies.
+        Needs ANTHROPIC_API_KEY.
         status is "answered" or "refused" (the sources do not contain the answer). Citation and
         pointer ids are checked by code against the retrieved articles; invented ids are dropped
         and counted in n_invalid_ids. Fetch the text of a cited article with get_article."""
@@ -286,7 +308,16 @@ def create_server(
                 "work without a key."
             )
         try:
-            res = get_pipeline().ask(question, language)
+            with paid_lock:
+                if paid["n"] >= paid["max"]:
+                    raise ToolError(
+                        f"Paid-call limit reached: this server process allows {paid['max']} "
+                        f"answer_with_citations calls ({MAX_PAID_CALLS_ENV}). Nothing was called. "
+                        "Restart the server to reset it, or use search_articles and "
+                        "get_article, which are free."
+                    )
+                paid["n"] += 1  # counted when attempted, also if the call then fails
+                res = get_pipeline().ask(question, language)
         except ToolError:
             raise
         except ValueError as e:
@@ -312,12 +343,20 @@ def create_server(
     return server
 
 
-def main() -> None:
+def configure_logging() -> None:
+    """Logs go to stderr. Whatever FEDLEX_MCP_LOG says, the HTTP and SDK loggers stay at WARNING
+    (at DEBUG they print request options, including prompts, i.e. the user's question)."""
     logging.basicConfig(
         stream=sys.stderr,
         level=os.environ.get("FEDLEX_MCP_LOG", "INFO"),
         format="%(levelname)s %(message)s",
     )
+    for name in QUIET_LOGGERS:
+        logging.getLogger(name).setLevel(logging.WARNING)
+
+
+def main() -> None:
+    configure_logging()
     create_server().run("stdio")
 
 
