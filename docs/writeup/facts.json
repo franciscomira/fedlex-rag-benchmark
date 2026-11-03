@@ -1,0 +1,109 @@
+{
+  "_note": "Numbers for the post that the harness does not produce. Each has its source; the post template reads them as {{f key}}. Harness numbers (recall, fact recall, cost, latency, intervals) are never listed here.",
+  "facts": {
+    "corpus_acts": {
+      "value": "8",
+      "source": "README.md status table; docs/phase0_report.md"
+    },
+    "corpus_articles": {
+      "value": "4,073",
+      "source": "README.md; articles.parquet has 12,219 rows = 4,073 articles x 3 languages"
+    },
+    "benchmark_items": {
+      "value": "242",
+      "source": "docs/phase1_report.md: 150 answerable questions, 20 traps, 72 translations"
+    },
+    "test_items": {
+      "value": "179",
+      "source": "docs/eval_spec.md section 1: 110 originals + 15 traps + 54 translations"
+    },
+    "test_answerable": {
+      "value": "164",
+      "source": "eval metrics n_answerable"
+    },
+    "test_groups": {
+      "value": "110",
+      "source": "docs/phase3_report.md: about 110 independent question groups"
+    },
+    "model_params": {
+      "value": "118 million",
+      "source": "docs/phase3_report.md; multilingual-e5-small"
+    },
+    "train_questions": {
+      "value": "11,504",
+      "source": "data/finetune/README.md counts table"
+    },
+    "train_articles": {
+      "value": "2,876",
+      "source": "data/finetune/README.md counts table"
+    },
+    "pool_articles": {
+      "value": "3,201",
+      "source": "data/finetune/README.md"
+    },
+    "question_generation_usd": {
+      "value": "0.87",
+      "source": "docs/phase3_report.md summary"
+    },
+    "phase3_spend_usd": {
+      "value": "2.16",
+      "source": "docs/phase3_report.md summary (ledger of 2026-10-28)"
+    },
+    "training_minutes": {
+      "value": "under 15",
+      "source": "docs/phase3_report.md: 3 epochs on a free Kaggle T4"
+    },
+    "int8_mb": {
+      "value": "118",
+      "source": "docs/phase3_report.md deployment table"
+    },
+    "fp32_mb": {
+      "value": "470",
+      "source": "docs/phase3_report.md deployment table (ONNX fp32); safetensors 449"
+    },
+    "judge_agreement": {
+      "value": "81%",
+      "source": "docs/phase2_report.md judge calibration: 63 fact labels from 30 answers, kappa 0.61"
+    },
+    "phase4_month_usd": {
+      "value": "4.2",
+      "source": "docs/phase4_progress.md: ledger after the test runs (4.16)"
+    },
+    "bug_old_recall": {
+      "value": "0.49",
+      "source": "eval run 2026-10-18_test_78df4b6f59 (also shown by {{v A2 recall@10}})"
+    },
+    "bug_new_recall": {
+      "value": "0.55",
+      "source": "eval run 2026-10-28_test_75cfac7c94 (also shown by {{v A3 recall@10}})"
+    },
+    "hardneg_gain_dev": {
+      "value": "+0.017 [0.000, +0.061]",
+      "source": "docs/phase3_report.md: run 2 over run 1, recall@10 on dev (58 items), not claimable"
+    },
+    "hardneg_slowdown": {
+      "value": "1.7 times",
+      "source": "docs/phase3_report.md: training time per step of run 2 relative to run 1"
+    },
+    "quarter_data_note": {
+      "value": "a quarter",
+      "source": "docs/phase3_report.md: a quarter of the data gives most of the dev gain"
+    },
+    "dev_items": {
+      "value": "58",
+      "source": "docs/phase3_report.md: dev answerable items"
+    },
+    "calib_facts": {
+      "value": "63",
+      "source": "docs/phase2_report.md judge calibration: fact labels"
+    },
+    "int8_loss_note": {
+      "value": "0.055",
+      "source": "P1 minus T1 MRR on test: -0.055 [-0.097, -0.018] (also shown by {{d P1 T1 mrr}})"
+    },
+    "mcp_tools": {
+      "value": "four",
+      "source": "docs/mcp.md: list_acts, search_articles, get_article, answer_with_citations"
+    }
+  }
+}
