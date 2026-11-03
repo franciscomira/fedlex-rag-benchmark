@@ -3,8 +3,9 @@
 #   docker build -f demo/Dockerfile -t fedlex-demo .
 #   docker run --rm -p 7860:7860 fedlex-demo
 #
-# This file has NOT been built or run by the author (no Docker on the machine it was written on).
-# Read demo/README.md before using it.
+# Built and run once locally on 2026-11-03 (Docker Desktop, Windows): about 100 s, image 1.9 GB, 670 MB
+# of memory when idle, /healthz and /api/search answered, same ranking as the local run. Not yet
+# built by Hugging Face. Read demo/README.md before using it.
 #
 # The image holds no article text in the repository: the build downloads the statutes from Fedlex
 # (the pinned URLs and hashes in data/manifest.json) and turns them into data/processed/articles.parquet.

@@ -11,8 +11,12 @@ once, offline. These come from `demo/examples.json`.
 
 ## Status
 
-Written and unit-tested (`uv run pytest tests/serve`). **The Dockerfile has not been built or run**:
-the machine it was written on has no Docker. Treat the first build as a test.
+Written and unit-tested (`uv run pytest tests/serve`). The Dockerfile was built and run once locally
+on 2026-11-03: the build took about 100 s (Fedlex download, corpus, index warm-up), the image is
+1.9 GB (mostly the project's dependency tree, which includes libraries the demo never imports), the
+container used about 670 MB of memory when idle, ran as user 1000 with no API key in its
+environment and no `data/raw`, and returned the same ranking as the local run. It has not been
+built by Hugging Face yet.
 
 ## Files
 
