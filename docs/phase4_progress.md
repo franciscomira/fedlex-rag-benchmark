@@ -40,3 +40,16 @@ Budget estimate for the three test runs: about 1.7 USD each for P2 and P3 (answe
 ## 2026-11-03, freeze
 
 Frozen in `eval/frozen_configs.json` before any test number: **P1 35611dd1aa**, **P2 d6a30cf69a**, **P3 716222848a**. The P2 and P3 hashes equal the hashes of their dev dry runs (`dev_P2`, `dev_P3`), so the configurations run on test are the ones that were tried on dev. Each is run once on test.
+
+## 2026-11-03, P1 test result (int8 embedder, retrieval only; run `2026-11-03_test_35611dd1aa`, once)
+
+n = 164 answerable items, 95% group bootstrap. Next to T1 (fp32, `2026-10-28_test_aec4726ef0`):
+
+| | Recall@1 | Recall@10 | MRR | English recall@10 | p50 |
+| --- | --- | --- | --- | --- | --- |
+| P1 int8 | 0.44 [0.34, 0.55] | **0.79 [0.69, 0.88]** | 0.58 [0.48, 0.68] | 0.80 | 0.05 s |
+| T1 fp32 | 0.48 [0.38, 0.59] | 0.81 [0.71, 0.90] | 0.63 [0.53, 0.73] | 0.80 | 0.07 s |
+
+Paired, P1 minus T1: recall@1 -0.040 [-0.099, +0.013], recall@10 -0.021 [-0.060, +0.012] (not claimable), **MRR -0.055 [-0.097, -0.018] (claimable loss)**.
+
+Against hypothesis 1: recall@10 in 0.77 to 0.84 held (0.79), the recall@10 difference to T1 within 0.04 and not claimable held, English at least 0.70 held (0.80). What I did not anticipate: the MRR loss is claimable (about 5 points), where dev (58 items) showed -0.007 [-0.085, +0.073], which could not resolve it. P1's absolute numbers are in line with its dev numbers (recall@10 0.78, MRR 0.583 on dev; 0.79 and 0.58 on test); T1's test numbers were higher than its dev numbers (0.79 and 0.589 on dev). **The pre-set stop rule ("a claimable loss against T1") applies, so P2 and P3 are not run until Francisco decides.**
