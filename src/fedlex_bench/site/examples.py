@@ -11,7 +11,7 @@ from html import escape
 from pathlib import Path
 
 from fedlex_bench.site.data import read_json
-from fedlex_bench.site.render import page_shell
+from fedlex_bench.site.render import POST_LINK, page_shell
 
 e = escape
 
@@ -89,7 +89,7 @@ def example_html(n: int, ex: dict) -> str:
     return "".join(parts)
 
 
-def render_examples(data: dict) -> str:
+def render_examples(data: dict, has_post: bool = False) -> str:
     items = data["examples"]
     n = len(items)
     answered = sum(1 for x in items if x["status"] == "answered")
@@ -125,6 +125,7 @@ def render_examples(data: dict) -> str:
     )
     nav = ('<a href="#top">About</a><a href="#examples">Answers</a>'
            '<a href="#try">Try it yourself</a><a href="index.html">Results</a>')
+    nav += POST_LINK if has_post else ""
     return page_shell(
         TITLE,
         "Recorded answers of the full pipeline over Swiss federal law. There is no live demo.",

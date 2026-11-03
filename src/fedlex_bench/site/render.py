@@ -654,6 +654,8 @@ NAV = (
     ("limits", "Limitations"), ("reproduce", "Reproduce"), ("links", "Links"),
 )
 EXAMPLES_PAGE = "examples.html"
+POST_PAGE = "post.html"
+POST_LINK = f'<a href="{POST_PAGE}">Write-up</a>'
 
 
 def notices_html() -> str:
@@ -683,9 +685,10 @@ def page_shell(title: str, description: str, nav: str, main: str, foot: str) -> 
     )
 
 
-def render_page(rep: Report) -> str:
+def render_page(rep: Report, has_post: bool = False) -> str:
     nav = "".join(f'<a href="#{i}">{e(t)}</a>' for i, t in NAV)
     nav += f'<a href="{EXAMPLES_PAGE}">Recorded examples</a>'
+    nav += POST_LINK if has_post else ""
     main = (
         f'<section id="answer"><h2>1. The answer in short</h2>{headline(rep)}</section>'
         f"{section_phase3(rep)}{section_phase2(rep)}{section_phase4(rep)}"

@@ -14,19 +14,39 @@ ASSETS = Path(__file__).parent / "assets"
 
 
 def write_site(root: Path, out: Path, manifest: Path | None = None) -> list[str]:
-    """Write the results page, css, data, and examples.html if demo/examples.json exists."""
+    """Write the results page, css, data, examples.html if demo/examples.json exists, and
+    post.html if docs/writeup/post.template.md exists (a failing template fails the build)."""
     report = build_report(root, manifest)
+    examples = load_examples(root)
+    post = build_post_html(root, report, has_examples=examples is not None)
     out.mkdir(parents=True, exist_ok=True)
     # Explicit newlines so the committed output does not change with the platform.
-    (out / "index.html").write_text(render_page(report), encoding="utf-8", newline="\n")
+    (out / "index.html").write_text(
+        render_page(report, has_post=post is not None), encoding="utf-8", newline="\n")
     css = (ASSETS / "style.css").read_text(encoding="utf-8")
     (out / "style.css").write_text(css, encoding="utf-8", newline="\n")
     (out / "results_data.json").write_text(dump_data(report), encoding="utf-8", newline="\n")
-    examples = load_examples(root)
     if examples is not None:
-        page = render_examples(examples)
+        page = render_examples(examples, has_post=post is not None)
         (out / "examples.html").write_text(page, encoding="utf-8", newline="\n")
+    if post is not None:
+        (out / "post.html").write_text(post, encoding="utf-8", newline="\n")
     return report.warnings
+
+
+def build_post_html(root: Path, report, has_examples: bool) -> str | None:
+    """The write-up page, or None when the project has no post template."""
+    from fedlex_bench.writeup.build import TEMPLATE, build_post
+    from fedlex_bench.writeup.placeholders import BuildError
+
+    template = root / TEMPLATE
+    if not template.exists():
+        return None
+    try:
+        return build_post(report, template.read_text(encoding="utf-8"), root,
+                          has_examples=has_examples).html
+    except BuildError as exc:
+        raise SystemExit("write-up build failed:\n" + "\n".join(exc.errors)) from exc
 
 
 def main(argv: list[str] | None = None) -> None:

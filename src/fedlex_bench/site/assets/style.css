@@ -133,3 +133,14 @@ footer { padding-bottom: 32px; }
 .note { font-size: 0.9rem; color: var(--muted); }
 .note.warn { background: var(--warn-soft); color: var(--text); padding: 6px 10px; border-radius: 4px; }
 ul.cites { margin: 0 0 8px; padding-left: 1.2rem; }
+.post p, .post li, .post blockquote { max-width: 46rem; }
+.post blockquote { margin: 12px 0; padding: 2px 14px; border-left: 4px solid var(--line); color: var(--muted); }
+.post hr { border: 0; border-top: 1px solid var(--line); margin: 24px 0; }
+.post pre { overflow-x: auto; margin: 12px 0; padding: 10px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+.post pre code { font-size: 0.85rem; white-space: pre; }
+.post :not(pre) > code { background: var(--surface); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; overflow-wrap: anywhere; }
+.post th.al-right, .post td.al-right { text-align: right; }
+.post th.al-center, .post td.al-center { text-align: center; }
+.post .v { font-weight: 700; }
+figure.wf-fig { margin: 16px 0; padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+figure.wf-fig svg { display: block; width: 100%; max-width: 30rem; height: auto; margin: 0 auto; }
