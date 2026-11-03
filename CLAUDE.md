@@ -2,7 +2,7 @@
 
 Public portfolio project. Plan: docs/PROJECT_PLAN.md (live version linked inside it).
 
-Status: Phase 3 done (fine-tuned embedding model; docs/phase3_report.md; Phase 2 has an errata section for an embedder bug found in Phase 3). Phase 4 (ship): int8 model and full pipeline measured on test (docs/phase4_progress.md); retrieval-only demo app, MCP server and results page built; not yet published (Space, GitHub Pages, push await the owner's OK). Next: publish, then Phase 5 write-up. Benchmark v1 frozen, tag benchmark-v1.
+Status: Phase 3 done (fine-tuned embedding model; docs/phase3_report.md; Phase 2 has an errata section for an embedder bug found in Phase 3). Phase 4 (ship) done: int8 model and full pipeline measured on test (docs/phase4_progress.md); results page and recorded examples live on GitHub Pages (https://franciscomira.github.io/fedlex-rag-benchmark/); MCP server and a local retrieval-only demo in the repo; no live demo (Hugging Face Docker Spaces need a paid plan). Next: Phase 5, write-up. Benchmark v1 frozen, tag benchmark-v1.
 
 ## Core question
 Can a small fine-tuned multilingual reranker match a frontier LLM reranker on cross-lingual retrieval over Swiss federal law (DE/FR/IT), at a fraction of the cost? Answers must cite article-level sources.

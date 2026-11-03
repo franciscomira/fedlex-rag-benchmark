@@ -9,7 +9,7 @@ from pathlib import Path
 LINKS = {
     "repo": "https://github.com/franciscomira/fedlex-rag-benchmark",
     "model": "https://huggingface.co/franciscomira/fedlex-e5-small",
-    "demo": {"text": "demo: coming", "url": None},
+    "demo": {"text": "recorded examples (no live demo)", "url": "examples.html"},
     "mcp_docs": "https://github.com/franciscomira/fedlex-rag-benchmark/blob/main/docs/mcp.md",
     "fedlex": "https://www.fedlex.admin.ch",
 }

@@ -7,13 +7,14 @@ import sys
 from pathlib import Path
 
 from fedlex_bench.site.build import DEFAULT_MANIFEST, PROJECT_ROOT, build_report, dump_data
+from fedlex_bench.site.examples import load_examples, render_examples
 from fedlex_bench.site.render import render_page
 
 ASSETS = Path(__file__).parent / "assets"
 
 
 def write_site(root: Path, out: Path, manifest: Path | None = None) -> list[str]:
-    """Write index.html, style.css and results_data.json under ``out``; return warnings."""
+    """Write the results page, css, data, and examples.html if demo/examples.json exists."""
     report = build_report(root, manifest)
     out.mkdir(parents=True, exist_ok=True)
     # Explicit newlines so the committed output does not change with the platform.
@@ -21,6 +22,10 @@ def write_site(root: Path, out: Path, manifest: Path | None = None) -> list[str]
     css = (ASSETS / "style.css").read_text(encoding="utf-8")
     (out / "style.css").write_text(css, encoding="utf-8", newline="\n")
     (out / "results_data.json").write_text(dump_data(report), encoding="utf-8", newline="\n")
+    examples = load_examples(root)
+    if examples is not None:
+        page = render_examples(examples)
+        (out / "examples.html").write_text(page, encoding="utf-8", newline="\n")
     return report.warnings
 
 

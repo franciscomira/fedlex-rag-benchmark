@@ -641,7 +641,7 @@ def section_links(rep: Report) -> str:
     items = [
         link(links.get("repo"), "Source code and data (GitHub)"),
         link(links.get("model"), "Fine-tuned model (Hugging Face)"),
-        link(demo.get("url"), demo.get("text", "demo: coming")),
+        link(demo.get("url"), demo.get("text", "recorded examples (no live demo)")),
         link(links.get("mcp_docs"), "MCP server documentation"),
         link(links.get("fedlex"), "Fedlex, the official source of the law"),
     ]
@@ -653,36 +653,51 @@ NAV = (
     ("answer", "Answer"), ("phase3", "Phase 3"), ("phase2", "Phase 2"), ("phase4", "Phase 4"),
     ("limits", "Limitations"), ("reproduce", "Reproduce"), ("links", "Links"),
 )
+EXAMPLES_PAGE = "examples.html"
 
 
-def render_page(rep: Report) -> str:
-    title = rep.manifest.get("title", "Results")
-    nav = "".join(f'<a href="#{i}">{e(t)}</a>' for i, t in NAV)
-    notices = (
+def notices_html() -> str:
+    return (
         f"<p>{e(NOT_OFFICIAL_EN)} <span lang=\"de\">{e(NOT_OFFICIAL_DE)}</span> "
         f"{e(NOT_LEGAL_ADVICE)}</p>"
     )
+
+
+def page_shell(title: str, description: str, nav: str, main: str, foot: str) -> str:
+    """Document skeleton shared by every page: notices at the top and bottom, one stylesheet."""
+    notices = notices_html()
     return (
         "<!doctype html>\n"
         '<html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
         '<meta name="color-scheme" content="light dark">'
         f"<title>{e(title)}</title>"
-        '<meta name="description" content="Results of a cross-lingual retrieval benchmark over '
-        'Swiss federal law, with every number rebuilt from the evaluation harness.">'
+        f'<meta name="description" content="{e(description, quote=True)}">'
         '<link rel="stylesheet" href="style.css"></head><body>'
         f'<header class="top"><div class="wrap"><div class="notice">{notices}</div>'
         f"<h1>{e(title)}</h1><nav aria-label=\"Sections\">{nav}</nav></div></header>"
-        '<main class="wrap">'
-        f'<section id="answer"><h2>1. The answer in short</h2>{headline(rep)}</section>'
-        f"{section_phase3(rep)}{section_phase2(rep)}{section_phase4(rep)}"
-        f"{section_limits(rep)}{section_reproduce(rep)}{section_links(rep)}"
-        "</main>"
+        f'<main class="wrap">{main}</main>'
         f'<footer class="wrap"><div class="notice">{notices}</div>'
-        "<p class=\"fine\">Statute text is not shown on this page. Built by "
-        "<code>uv run python -m fedlex_bench.site build</code> from the committed files under "
-        "<code>eval/</code>; no script, font or tracker is loaded from elsewhere.</p></footer>"
+        f'<p class="fine">{foot}</p></footer>'
         "</body></html>\n"
     )
 
 
+def render_page(rep: Report) -> str:
+    nav = "".join(f'<a href="#{i}">{e(t)}</a>' for i, t in NAV)
+    nav += f'<a href="{EXAMPLES_PAGE}">Recorded examples</a>'
+    main = (
+        f'<section id="answer"><h2>1. The answer in short</h2>{headline(rep)}</section>'
+        f"{section_phase3(rep)}{section_phase2(rep)}{section_phase4(rep)}"
+        f"{section_limits(rep)}{section_reproduce(rep)}{section_links(rep)}"
+    )
+    return page_shell(
+        rep.manifest.get("title", "Results"),
+        "Results of a cross-lingual retrieval benchmark over Swiss federal law, with every "
+        "number rebuilt from the evaluation harness.",
+        nav,
+        main,
+        "Statute text is not shown on this page. Built by "
+        "<code>uv run python -m fedlex_bench.site build</code> from the committed files under "
+        "<code>eval/</code>; no script, font or tracker is loaded from elsewhere.",
+    )

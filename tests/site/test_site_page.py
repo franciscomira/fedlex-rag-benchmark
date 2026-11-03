@@ -197,7 +197,7 @@ def test_no_external_resources(tmp_path):
             if parsed.scheme:
                 assert parsed.scheme == "https" and parsed.netloc in ALLOWED_LINK_HOSTS, value
             else:
-                assert value.startswith("#"), value
+                assert value.startswith("#") or value == "examples.html", value
         else:  # link, and anything else, must be a local file
             assert not parsed.scheme and not parsed.netloc and not value.startswith("//"), value
     css = (tmp_path / "out" / "style.css").read_text("utf-8")
@@ -207,7 +207,9 @@ def test_no_external_resources(tmp_path):
 def test_demo_placeholder_text_and_configurable(tmp_path):
     root, manifest = make_root(tmp_path)
     write_site(root, tmp_path / "o1", manifest)
-    assert 'class="soon">demo: coming</span>' in (tmp_path / "o1/index.html").read_text("utf-8")
+    page1 = (tmp_path / "o1/index.html").read_text("utf-8")
+    assert '<a href="examples.html">recorded examples (no live demo)</a>' in page1
+    assert "demo: coming" not in page1
     data = json.loads(manifest.read_text("utf-8"))
     data["links"]["demo"] = {"text": "Try the demo", "url": "https://github.com/x/y"}
     manifest.write_text(json.dumps(data), encoding="utf-8")

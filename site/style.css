@@ -122,3 +122,14 @@ footer { padding-bottom: 32px; }
   table.repro td { border: 0; padding: 4px 8px; }
   table.repro td::before { content: attr(data-label); display: block; font-size: 0.75rem; color: var(--muted); }
 }
+.example { margin: 16px 0; padding: 4px 16px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+.example.differs { border-left: 4px solid var(--warn); }
+.example h3 { margin-top: 12px; }
+.langtag { display: inline-block; vertical-align: middle; margin-left: 6px; padding: 1px 8px; border-radius: 4px; font-size: 0.78rem; font-weight: 700; background: var(--accent-soft); color: var(--accent); border: 1px solid currentColor; }
+.question { font-weight: 600; }
+.answer { white-space: pre-wrap; overflow-wrap: anywhere; padding-left: 12px; border-left: 3px solid var(--line); }
+.status-answered { color: var(--good); }
+.status-refused { color: var(--no); }
+.note { font-size: 0.9rem; color: var(--muted); }
+.note.warn { background: var(--warn-soft); color: var(--text); padding: 6px 10px; border-radius: 4px; }
+ul.cites { margin: 0 0 8px; padding-left: 1.2rem; }

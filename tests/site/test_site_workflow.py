@@ -28,7 +28,7 @@ def test_committed_site_matches_a_fresh_build(tmp_path):
     if not (committed / "index.html").exists():
         return
     write_site(PROJECT_ROOT, tmp_path)
-    for name in ("index.html", "style.css", "results_data.json"):
+    for name in ("index.html", "style.css", "results_data.json", "examples.html"):
         assert (tmp_path / name).read_bytes() == (committed / name).read_bytes(), (
             f"site/{name} is stale: run `uv run python -m fedlex_bench.site build`"
         )
