@@ -27,11 +27,11 @@
          "name": "Fine-tuned embedder + LLM reranker"},
   "Cp": {"id": "2026-10-28_test_033e9b80b2", "label": "C'",
          "name": "LLM translation + hybrid search + reranker, corrected embedder, retrieval only"},
-  "P1": {"id": null, "label": "P1",
+  "P1": {"id": "2026-11-03_test_35611dd1aa", "label": "P1",
          "name": "Fine-tuned embedder as int8 ONNX file, retrieval only"},
-  "P2": {"id": null, "label": "P2",
+  "P2": {"id": "2026-11-03_test_d6a30cf69a", "label": "P2",
          "name": "Full pipeline with cited answers (fine-tuned embedder, reranker, answerer)"},
-  "P3": {"id": null, "label": "P3",
+  "P3": {"id": "2026-11-03_test_716222848a", "label": "P3",
          "name": "Translation pipeline with the answer step"}
  },
  "sections": {

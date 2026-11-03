@@ -53,3 +53,26 @@ n = 164 answerable items, 95% group bootstrap. Next to T1 (fp32, `2026-10-28_tes
 Paired, P1 minus T1: recall@1 -0.040 [-0.099, +0.013], recall@10 -0.021 [-0.060, +0.012] (not claimable), **MRR -0.055 [-0.097, -0.018] (claimable loss)**.
 
 Against hypothesis 1: recall@10 in 0.77 to 0.84 held (0.79), the recall@10 difference to T1 within 0.04 and not claimable held, English at least 0.70 held (0.80). What I did not anticipate: the MRR loss is claimable (about 5 points), where dev (58 items) showed -0.007 [-0.085, +0.073], which could not resolve it. P1's absolute numbers are in line with its dev numbers (recall@10 0.78, MRR 0.583 on dev; 0.79 and 0.58 on test); T1's test numbers were higher than its dev numbers (0.79 and 0.589 on dev). **The pre-set stop rule ("a claimable loss against T1") applies, so P2 and P3 are not run until Francisco decides.**
+
+## 2026-11-03, P2 and P3 test results (each run once; 164 answerable items, 15 traps; judge gpt-6.1-sol; 95% group bootstrap)
+
+Runs `2026-11-03_test_d6a30cf69a` (P2) and `2026-11-03_test_716222848a` (P3). Zero parse failures and zero judge failures in both.
+
+| Test | R@1 | R@10 | MRR | Fact recall | Faithfulness | Cit. precision | Cit. recall | Over-refusal | Traps | Cost / q | p50 / p95 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| **P2** serving pipeline (int8 + Haiku rerank + answer) | 0.76 [0.67, 0.85] | 0.86 [0.78, 0.94] | 0.84 [0.75, 0.92] | 0.80 [0.71, 0.89] | 0.84 [0.80, 0.87] | 0.58 [0.50, 0.65] | 0.88 [0.80, 0.95] | 0.02 [0.00, 0.05] | 9/15 | 0.0024 | 5.5 / 10.6 s |
+| **P3** translation pipeline + answer | 0.76 [0.67, 0.84] | 0.87 [0.79, 0.94] | 0.84 [0.76, 0.91] | 0.82 [0.75, 0.89] | 0.85 [0.83, 0.88] | 0.57 [0.49, 0.64] | 0.88 [0.80, 0.94] | 0.01 [0.00, 0.03] | 11/15 | 0.0030 | 11.9 / 17.5 s |
+
+English recall@10 0.87 (P2) and 0.86 (P3); English fact recall 0.83 and 0.81. Invalid ids dropped by code: 0.006 per answer (P2), 0 (P3). Judge cost 1.03 and 1.07 USD. Month spend after all Phase 4 test runs: 4.16 USD of 25.
+
+Paired differences (first minus second; recall@10, fact recall, faithfulness; 95% interval):
+- **P2 minus P3**: recall@10 -0.009 [-0.084, +0.060], MRR +0.002 [-0.076, +0.075], fact recall -0.021 [-0.099, +0.051], faithfulness -0.018 [-0.047, +0.012]: none claimable. Cost per question lower by 0.0006 USD and median latency lower by 6.1 s [5.6, 6.5], both claimable.
+- **P2 minus Phase 2's B** (buggy first stage, same judge): recall@10 +0.216 [+0.121, +0.314], fact recall **+0.196 [+0.103, +0.293]** (claimable); faithfulness -0.003 [-0.033, +0.027].
+- **P2 minus Phase 2's C** (buggy first stage): recall@10 +0.052 [-0.037, +0.140], fact recall +0.040 [-0.051, +0.130] (not claimable).
+
+Against the hypotheses written before the runs:
+- **Held:** P2 recall@10 (0.86, expected 0.84 to 0.93), recall@1 (0.76), faithfulness, over-refusal (0.02 against at most 0.08), invalid ids, cost, latency; traps 9 of 15 (expected 9 to 13, at the bottom edge; Phase 2: 10, 10, 11 of 15); P3 recall@10 (0.87), faithfulness, traps (11), cost, latency; hypothesis 4 (P2 and P3 not distinguishable on quality, P2 cheaper and about twice as fast); hypothesis 5 (P2 over B claimable, P2 over C not).
+- **Missed, upwards:** fact recall was above the expected range for both: P2 0.80 (expected 0.62 to 0.78), P3 0.82 (expected 0.64 to 0.80). Dev (0.68 and 0.69) had understated it; both dev intervals contained the test values. Nothing failed in an unfavourable direction.
+- **Stop rule:** P2 recall@10 is 0.86, above the 0.80 threshold; no stop.
+
+What this means, with its limits: the tuned-embedder pipeline gives the same answers as the LLM-translation pipeline, with the difference not resolved either way (fact recall -0.021, interval about +-0.075), at 20% lower cost and about half the median latency. Phase 2's fact recall for B was 0.61 on a buggy first stage and is now 0.80 with the corrected tuned one, which is a mostly-retrieval effect, since the answerer and judge are the same. Traps: 9 of 15 for P2, 11 for P3 (counts, no ranking). Citation precision stays near 0.58 as in Phase 2: models cite every article they used, and the gold is one article. The benchmark ceiling and drafting-bias limitations from Phase 2 and 3 still apply (questions written by an LLM from the article text; 110 independent question groups).
